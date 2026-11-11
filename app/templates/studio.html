@@ -1,0 +1,1686 @@
+{% extends "base.html" %}
+{% block title %}Studio · {{ app_name }}{% endblock %}
+{% block content %}
+
+<section class="panel" id="llm-panel">
+  <h2 style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:.5rem;" id="llm-toggle">
+    <span id="llm-toggle-icon" style="font-size:.8em;">▶</span>
+    AI Model
+    <span id="llm-badge" style="font-size:.75rem;padding:.2rem .65rem;border-radius:999px;background:#1e293b;color:#94a3b8;margin-left:.25rem;font-weight:500;"></span>
+  </h2>
+  <div id="llm-body" hidden>
+
+    <p style="margin:0 0 .9rem;color:#94a3b8;font-size:.875rem;">
+      Select which AI provider to use for normalization. Credentials are read from <code>.env</code> — greyed-out options need their key set first.
+    </p>
+
+    <!-- Provider cards -->
+    <div id="llm-provider-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;margin-bottom:1.1rem;">
+      <button class="llm-provider-btn" data-provider="none" type="button">
+        <span class="llm-btn-icon">⊘</span>
+        <span class="llm-btn-label">None</span>
+        <span class="llm-btn-sub">Heuristic only</span>
+      </button>
+      <button class="llm-provider-btn" data-provider="ollama" type="button">
+        <span class="llm-btn-icon">🦙</span>
+        <span class="llm-btn-label">Ollama</span>
+        <span class="llm-btn-sub" id="ollama-detail">—</span>
+      </button>
+      <button class="llm-provider-btn" data-provider="openai" type="button">
+        <span class="llm-btn-icon">✦</span>
+        <span class="llm-btn-label">OpenAI</span>
+        <span class="llm-btn-sub" id="openai-detail">—</span>
+      </button>
+      <button class="llm-provider-btn" data-provider="gemini" type="button">
+        <span class="llm-btn-icon">◈</span>
+        <span class="llm-btn-label">Gemini</span>
+        <span class="llm-btn-sub" id="gemini-detail">—</span>
+      </button>
+    </div>
+
+    <!-- Normalize mode -->
+    <div class="field" style="max-width:320px;margin-bottom:1rem;">
+      <label for="llm-mode-sel">Normalize mode</label>
+      <select id="llm-mode-sel">
+        <option value="llm_labels_only">LLM — labels &amp; names only</option>
+        <option value="llm_merge">LLM — full merge (gated)</option>
+      </select>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary" id="btn-save-llm" style="padding:.35rem 1.1rem;font-size:.875rem;">Save</button>
+      <button type="button" class="btn" id="btn-test-llm" style="padding:.35rem 1.1rem;font-size:.875rem;background:#1e293b;border:1px solid #334155;color:#94a3b8;">Test Connection</button>
+      <span id="llm-save-msg" style="font-size:.85rem;color:#94a3b8;"></span>
+    </div>
+
+    <!-- Live test result box -->
+    <div id="llm-test-result" hidden style="margin-top:.9rem;padding:.75rem 1rem;border-radius:6px;font-size:.82rem;font-family:monospace;line-height:1.6;border:1px solid #334155;background:#0f172a;"></div>
+  </div>
+</section>
+
+<style>
+.llm-provider-btn {
+  display: flex; flex-direction: column; align-items: center; gap: .2rem;
+  padding: .75rem .5rem; border-radius: 8px;
+  border: 2px solid #334155; background: #0f172a; color: #cbd5e1;
+  cursor: pointer; transition: border-color .15s, opacity .15s;
+  font-family: inherit;
+}
+.llm-provider-btn:hover:not(:disabled) { border-color: #475569; }
+.llm-provider-btn.active {
+  border-color: #38bdf8; background: #0c2a3f; color: #e2e8f0;
+}
+.llm-provider-btn[data-provider="ollama"].active { border-color: #22c55e; background: #052e16; }
+.llm-provider-btn[data-provider="openai"].active  { border-color: #38bdf8; background: #0c2a3f; }
+.llm-provider-btn[data-provider="gemini"].active  { border-color: #a78bfa; background: #1e1040; }
+.llm-provider-btn:disabled { opacity: .38; cursor: not-allowed; }
+.llm-btn-icon { font-size: 1.4rem; line-height: 1; }
+.llm-btn-label { font-weight: 600; font-size: .9rem; }
+.llm-btn-sub { font-size: .72rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.llm-provider-btn.active .llm-btn-sub { color: #94a3b8; }
+</style>
+
+<section class="panel">
+  <h2>Upload</h2>
+  <p class="hint" style="margin:0 0 1rem; color: #94a3b8; font-size: 0.9rem;">
+    Choose the file type, then select one file. The pipeline runs automatically: parse → normalize → 2D layout. Supported formats match
+    <a href="/docs">POST /upload</a> (<code>sheet</code>: Excel, CSV, ZIP, PDF · <code>image</code> · <code>cad</code>: DXF).
+  </p>
+  <div class="upload-row">
+    <div class="field">
+      <label for="input-type">Input type</label>
+      <select id="input-type" name="type">
+        <option value="sheet" selected>Sheet (xlsx, csv, zip, pdf)</option>
+        <option value="image">Image (png, jpg, …)</option>
+        <option value="cad">CAD (dxf)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="project-name">Project name (optional)</label>
+      <input type="text" id="project-name" placeholder="e.g. Store layout" autocomplete="off">
+    </div>
+  </div>
+  <div class="upload-row" style="margin-top: 1rem; align-items: center;">
+    <label class="drop-zone" id="drop-zone" for="file-input">
+      <div>Drop a file here or <strong>click to browse</strong></div>
+      <div class="hint" id="accept-hint"></div>
+      <div class="filename" id="file-label">No file selected</div>
+      <input type="file" id="file-input" name="file">
+    </label>
+    <button type="button" class="btn btn-primary" id="btn-run" disabled>Run pipeline</button>
+  </div>
+  <div class="steps" id="steps" aria-live="polite">
+    <span class="step" data-step="upload">1 · Upload</span>
+    <span class="step" data-step="parse">2 · Parse</span>
+    <span class="step" data-step="normalize">3 · Normalize</span>
+    <span class="step" data-step="layout">4 · Layout</span>
+  </div>
+  <p class="status-msg" id="status"></p>
+  <p id="ai-used-line" hidden style="margin:.35rem 0 0;font-size:.8rem;color:#64748b;"></p>
+</section>
+
+<section class="panel result-panel">
+  <h2>Result</h2>
+  <p class="empty-result" id="result-empty">Run the pipeline to see the vector plan here.</p>
+  <div id="result-tools" hidden>
+
+    <!-- View tabs -->
+    <div class="view-tabs">
+      <button class="view-tab active" id="tab-diagram">Diagram</button>
+      <button class="view-tab" id="tab-dxf">DXF View</button>
+      <button class="view-tab" id="tab-massing">3D Massing</button>
+      <button class="view-tab" id="tab-photoreal">Photoreal</button>
+    </div>
+
+    <!-- Diagram panel (existing SVG view) -->
+    <div id="panel-diagram">
+      <div class="result-toolbar">
+        <label>
+          <input type="checkbox" id="fit-width" />
+          Shrink to fit panel width
+        </label>
+        <span class="result-hint">Otherwise scroll horizontally and vertically to see the full plan.</span>
+        <a id="btn-dxf" href="#" hidden
+           style="margin-left:auto;padding:0.35rem 0.9rem;background:#0f4c81;color:#e2e8f0;border-radius:4px;font-size:0.85rem;text-decoration:none;white-space:nowrap;"
+           title="Download civil-grade DXF (walls, fixtures, dimensions, title block, BOM)">
+          ⬇ Download DXF
+        </a>
+      </div>
+      <div class="svg-viewport" role="region" aria-label="Layout preview">
+        <div class="svg-host" id="svg-host"></div>
+      </div>
+    </div>
+
+    <!-- DXF View panel -->
+    <div id="panel-dxf" hidden>
+      <div class="dxf-toolbar">
+        <button class="dxf-tool-btn" id="dxf-fit" title="Fit all entities in view">⤢ Fit</button>
+        <button class="dxf-tool-btn" id="dxf-zoom-in" title="Zoom in">＋</button>
+        <button class="dxf-tool-btn" id="dxf-zoom-out" title="Zoom out">－</button>
+        <span class="dxf-zoom-label" id="dxf-zoom-label">—</span>
+        <span class="dxf-sep"></span>
+        <span class="dxf-coords" id="dxf-coords"></span>
+        <span id="dxf-load-status" style="margin-left:auto;font-size:.78rem;color:#64748b;"></span>
+      </div>
+      <div class="dxf-workspace">
+        <canvas id="dxf-canvas"></canvas>
+        <div class="dxf-layers-panel" id="dxf-layers-panel">
+          <div class="dxf-layers-title">Layers</div>
+          <div id="dxf-layers-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3D Massing panel (Tier A: boxes + dimensions, no materials) -->
+    <div id="panel-massing" hidden>
+      <div class="dxf-toolbar">
+        <button class="dxf-tool-btn" id="massing-fit" title="Frame the whole model">&#10530; Fit</button>
+        <span class="dxf-sep"></span>
+        <label class="massing-toggle"><input type="checkbox" id="massing-walls" checked> Walls</label>
+        <label class="massing-toggle"><input type="checkbox" id="massing-fixtures" checked> Fixtures</label>
+        <label class="massing-toggle"><input type="checkbox" id="massing-ceiling"> Ceiling</label>
+        <label class="massing-toggle"><input type="checkbox" id="massing-floor" checked> Floor</label>
+        <label class="massing-toggle"><input type="checkbox" id="massing-labels" checked> Dimensions</label>
+        <span class="dxf-sep"></span>
+        <label class="massing-toggle" for="massing-view">View</label>
+        <select id="massing-view" class="massing-select"></select>
+        <span class="dxf-sep"></span>
+        <button class="dxf-tool-btn" id="massing-shot" title="Save a PNG of the current view">&#128247; PNG</button>
+        <a id="massing-download" href="#" class="dxf-tool-btn" download
+           title="Download the GLB (regenerated on request, never stored server-side)">&#11015; GLB</a>
+        <span id="massing-status" style="margin-left:auto;font-size:.78rem;color:#64748b;"></span>
+      </div>
+      <div class="massing-workspace">
+        <div class="massing-host" id="massing-host"></div>
+        <div class="massing-badge" id="massing-badge" hidden></div>
+        <div class="massing-pick" id="massing-pick" hidden>
+          <button class="massing-pick-close" id="massing-pick-close" title="Close">&times;</button>
+          <div class="massing-pick-body" id="massing-pick-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Photoreal panel (Stage 2: Blender/Cycles, rendered server-side) -->
+    <div id="panel-photoreal" hidden>
+      <div class="view-tabs photoreal-mode-tabs">
+        <button class="view-tab active" id="photoreal-mode-still">Still</button>
+        <button class="view-tab" id="photoreal-mode-turntable">Turntable</button>
+      </div>
+
+      <!-- Still: one photoreal frame from a chosen named viewpoint -->
+      <div id="photoreal-still-panel">
+        <div class="dxf-toolbar">
+          <label class="massing-toggle" for="photoreal-view">View</label>
+          <select id="photoreal-view" class="massing-select"></select>
+          <button class="dxf-tool-btn" id="photoreal-generate">&#9728; Generate photoreal render</button>
+          <span id="photoreal-status" style="margin-left:.5rem;font-size:.78rem;color:#64748b;"></span>
+          <a id="photoreal-download" href="#" class="dxf-tool-btn" download hidden
+             style="margin-left:auto;" title="Download the rendered PNG">&#11015; PNG</a>
+        </div>
+        <div class="photoreal-workspace">
+          <p class="photoreal-empty" id="photoreal-empty">
+            Renders the current layout with Blender/Cycles — real lighting, reflections and
+            materials instead of the flat preview in the 3D Massing tab. This runs on this
+            machine's CPU (no GPU here), so a render takes roughly a minute; the 3D Massing
+            tab stays interactive while you wait.
+          </p>
+          <img class="photoreal-image" id="photoreal-image" hidden alt="Photoreal render" />
+        </div>
+      </div>
+
+      <!-- Turntable: a pre-rendered 360° lap, stitched into a looping GIF --
+           not a live orbit (this machine has no GPU for real-time ray
+           tracing). See massing-viewer.js / the 3D Massing tab for the one
+           that actually orbits live, at the cost of photoreal lighting. -->
+      <div id="photoreal-turntable-panel" hidden>
+        <div class="dxf-toolbar">
+          <button class="dxf-tool-btn" id="turntable-generate">&#128260; Generate turntable</button>
+          <button class="dxf-tool-btn" id="turntable-cancel" hidden>&#10005; Cancel</button>
+          <span id="turntable-status" style="margin-left:.5rem;font-size:.78rem;color:#64748b;"></span>
+          <a id="turntable-download" href="#" class="dxf-tool-btn" download hidden
+             style="margin-left:auto;" title="Download the looping GIF">&#11015; GIF</a>
+        </div>
+        <div class="photoreal-workspace">
+          <p class="photoreal-empty" id="turntable-empty">
+            A pre-rendered 360° lap around the layout, played back as a loop — not a live
+            orbit (this machine has no GPU for that; drag around the 3D Massing tab instead
+            for a real-time view). Several minutes: each angle is rendered once, in the
+            background, then stitched into a GIF.
+          </p>
+          <img class="photoreal-image" id="turntable-image" hidden alt="Photoreal turntable (looping)" />
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const drop = $("drop-zone");
+  const fileInput = $("file-input");
+  const fileLabel = $("file-label");
+  const acceptHint = $("accept-hint");
+  const inputType = $("input-type");
+  const projectName = $("project-name");
+  const btnRun = $("btn-run");
+  const statusEl = $("status");
+  const aiUsedLine = $("ai-used-line");
+  const stepsEl = $("steps");
+  const svgHost = $("svg-host");
+  const resultEmpty = $("result-empty");
+  const resultTools = $("result-tools");
+  const fitWidthCb = $("fit-width");
+  const btnDxf = $("btn-dxf");
+
+  const acceptMap = {
+    sheet: ".xlsx,.xls,.csv,.zip,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/zip,application/pdf",
+    image: "image/png,image/jpeg,image/webp,image/tif,image/bmp,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp",
+    cad: ".dxf",
+  };
+
+  function syncAccept() {
+    const t = inputType.value;
+    fileInput.accept = acceptMap[t] || "";
+    acceptHint.textContent =
+      t === "sheet"
+        ? "Excel · CSV · ZIP · PDF"
+        : t === "image"
+          ? "PNG · JPG · WebP · …"
+          : "DXF";
+  }
+
+  inputType.addEventListener("change", syncAccept);
+  syncAccept();
+
+  function setFile(file) {
+    if (!file) {
+      fileLabel.textContent = "No file selected";
+      btnRun.disabled = true;
+      return;
+    }
+    fileLabel.textContent = file.name;
+    btnRun.disabled = false;
+  }
+
+  fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+
+  ["dragenter", "dragover"].forEach((ev) => {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((ev) => {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.remove("dragover");
+    });
+  });
+  drop.addEventListener("drop", (e) => {
+    const f = e.dataTransfer.files[0];
+    if (f) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        fileInput.files = dt.files;
+      } catch (_) {
+        /* eslint-disable no-console */
+        console.warn("Could not assign dropped file");
+      }
+      setFile(f);
+    }
+  });
+
+  function setStep(name) {
+    const order = ["upload", "parse", "normalize", "layout"];
+    const idx = order.indexOf(name);
+    stepsEl.querySelectorAll(".step").forEach((el) => {
+      const s = el.getAttribute("data-step");
+      const i = order.indexOf(s);
+      el.classList.remove("active", "done");
+      if (i < idx) el.classList.add("done");
+      if (i === idx) el.classList.add("active");
+    });
+  }
+
+  async function apiError(res) {
+    try {
+      const j = await res.json();
+      const d = j.detail;
+      if (typeof d === "string") return d;
+      if (Array.isArray(d))
+        return d
+          .map((x) => (x.msg ? `${(x.loc || []).join(".")}: ${x.msg}` : JSON.stringify(x)))
+          .join("; ");
+      return JSON.stringify(d ?? j);
+    } catch {
+      return await res.text();
+    }
+  }
+
+  btnRun.addEventListener("click", async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    statusEl.textContent = "";
+    statusEl.className = "status-msg";
+    aiUsedLine.hidden = true;
+    aiUsedLine.textContent = "";
+    svgHost.innerHTML = "";
+    svgHost.classList.remove("fit-width");
+    resultTools.hidden = true;
+    resultEmpty.hidden = false;
+    btnDxf.hidden = true;
+
+    const type = inputType.value;
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("type", type);
+    const pn = projectName.value.trim();
+    if (pn) fd.append("project_name", pn);
+
+    btnRun.disabled = true;
+    setStep("upload");
+
+    try {
+      statusEl.textContent = "Uploading…";
+      let res = await fetch("/upload", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await apiError(res));
+      const up = await res.json();
+      const { file_id, project_id } = up;
+
+      setStep("parse");
+      statusEl.textContent = "Parsing…";
+      res = await fetch(`/process/${file_id}`, { method: "POST" });
+      if (!res.ok) throw new Error(await apiError(res));
+
+      setStep("normalize");
+      statusEl.textContent = "Normalizing…";
+      res = await fetch(`/normalize/${file_id}`, { method: "POST" });
+      if (!res.ok) throw new Error(await apiError(res));
+
+      setStep("layout");
+      statusEl.textContent = "Generating layout…";
+      res = await fetch(`/generate-layout/${project_id}`, { method: "POST" });
+      if (!res.ok) throw new Error(await apiError(res));
+      const gen = await res.json();
+
+      const svgRes = await fetch(`/output/${project_id}/svg`);
+      if (!svgRes.ok) throw new Error("SVG not available after layout.");
+      const svgText = await svgRes.text();
+
+      svgHost.innerHTML = svgText;
+      const rootSvg = svgHost.querySelector("svg");
+      if (rootSvg) {
+        rootSvg.classList.add("layout-svg");
+        rootSvg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+      }
+      resultTools.hidden = false;
+      resultEmpty.hidden = true;
+      fitWidthCb.checked = false;
+      svgHost.classList.remove("fit-width");
+
+      // Wire DXF download button
+      btnDxf.href = `/output/${project_id}/dxf`;
+      btnDxf.download = `planforge_${project_id.slice(0, 8)}.dxf`;
+      btnDxf.hidden = false;
+
+      // Notify DXF viewer a new project is ready
+      if (typeof window._dxfViewerReady === "function") window._dxfViewerReady(project_id);
+      if (typeof window._massingViewerReady === "function") window._massingViewerReady(project_id);
+      if (typeof window._photorealViewerReady === "function") window._photorealViewerReady(project_id);
+
+      setStep("layout");
+      stepsEl.querySelectorAll(".step").forEach((el) => {
+        el.classList.add("done");
+        el.classList.remove("active");
+      });
+
+      statusEl.textContent = "Done.";
+      statusEl.classList.add("ok");
+
+      // Show which AI backend was used
+      const norm = gen.normalization || {};
+      const nb = norm.normalized_by || "";
+      const AI_LABELS = {
+        ollama: "Ollama", http_llm: "HTTP LLM (OpenAI/Gemini)",
+        heuristic_llm_labels: "Heuristic + LLM labels",
+        heuristic_llm_rejected: "Heuristic (LLM rejected)",
+        heuristic: "Heuristic",
+      };
+      if (nb) {
+        const label = AI_LABELS[nb] || nb;
+        const rejected = norm.llm_candidate_rejected ? " · LLM output rejected, used heuristic" : "";
+        aiUsedLine.textContent = `Normalized by: ${label}${rejected}`;
+        aiUsedLine.hidden = false;
+      }
+    } catch (e) {
+      statusEl.textContent = e.message || String(e);
+      statusEl.classList.add("error");
+      setStep("upload");
+    } finally {
+      btnRun.disabled = !fileInput.files[0];
+    }
+  });
+
+  fitWidthCb.addEventListener("change", () => {
+    svgHost.classList.toggle("fit-width", fitWidthCb.checked);
+  });
+})();
+
+// ── Tab switcher (Diagram / DXF View / 3D Massing) ────────
+(function () {
+  const TABS = [
+    { tab: "tab-diagram", panel: "panel-diagram" },
+    { tab: "tab-dxf",     panel: "panel-dxf",     onShow: "_dxfTabActivated" },
+    { tab: "tab-massing", panel: "panel-massing", onShow: "_massingTabActivated" },
+    { tab: "tab-photoreal", panel: "panel-photoreal", onShow: "_photorealTabActivated" },
+  ];
+
+  for (const entry of TABS) {
+    document.getElementById(entry.tab).addEventListener("click", () => {
+      for (const other of TABS) {
+        const isActive = other === entry;
+        document.getElementById(other.tab).classList.toggle("active", isActive);
+        document.getElementById(other.panel).hidden = !isActive;
+      }
+      if (entry.onShow && typeof window[entry.onShow] === "function") {
+        window[entry.onShow]();
+      }
+    });
+  }
+})();
+
+// ── 3D Massing tab ────────────────────
+// three.js is imported only when this tab is first opened, so users who never
+// leave the 2D views do not download it.
+(function () {
+  const host     = document.getElementById("massing-host");
+  const statusEl = document.getElementById("massing-status");
+  const badgeEl  = document.getElementById("massing-badge");
+  const dlEl     = document.getElementById("massing-download");
+  const pickEl   = document.getElementById("massing-pick");
+  const pickBody = document.getElementById("massing-pick-body");
+
+  let projectId = null;
+  let loadedFor = null;
+  let api = null;
+  let wired = false;
+
+  window._massingViewerReady = function (pid) {
+    projectId = pid;
+    loadedFor = null;
+    dlEl.href = `/output/${pid}/glb`;
+    dlEl.download = `planforge_${pid.slice(0, 8)}.glb`;
+  };
+
+  function showError(msg, detail) {
+    // Failures here are invisible if they only reach the toolbar, so say it in
+    // the viewport where the model should have been.
+    statusEl.textContent = "Failed";
+    badgeEl.hidden = true;
+    host.innerHTML =
+      '<div class="massing-error">' +
+      '<strong>3D view unavailable</strong>' +
+      '<p>' + msg + '</p>' +
+      (detail ? '<pre>' + detail + '</pre>' : '') +
+      '<p class="massing-error-hint">The Diagram and DXF View tabs still work. ' +
+      'Check the browser console for the full error.</p></div>';
+  }
+
+  window._massingTabActivated = async function () {
+    if (!projectId) { statusEl.textContent = "Run the pipeline first."; return; }
+    if (api && api.getViewer()) api.getViewer().resize();
+    if (loadedFor === projectId) return;
+
+    // Chrome dropped the SwiftShader CPU fallback, so on a locked-down or VDI
+    // machine WebGL fails outright. Check before pulling three.js down.
+    try {
+      const probe = document.createElement("canvas");
+      if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) {
+        showError("WebGL is not available in this browser.");
+        return;
+      }
+    } catch (e) {
+      showError("WebGL is not available in this browser.");
+      return;
+    }
+
+    statusEl.textContent = "Building 3D massing\u2026";
+    try {
+      if (!api) api = await import("/static/js/massing-viewer.js");
+      await api.mount(host, projectId, { onLoaded });
+      loadedFor = projectId;
+    } catch (e) {
+      console.error("[massing] load failed", e);
+      const m = e && e.message ? e.message : String(e);
+      if (/Failed to (fetch|resolve)|dynamically imported|Importing a module/i.test(m)) {
+        showError(
+          "Could not load three.js. The viewer imports it from cdn.jsdelivr.net, " +
+          "so this machine needs network access to that host.", m);
+      } else {
+        showError("The massing model could not be built.", m);
+      }
+    }
+  };
+
+  function onLoaded(meta, viewer) {
+    const p = meta.provenance || {};
+    const s = meta.stats || {};
+    statusEl.textContent =
+      `${s.wall_boxes} wall boxes \u00b7 ${s.fixtures} fixtures ` +
+      `(${p.fixtures_typed || 0} typed) \u00b7 ${s.fixture_bands || 0} bands \u00b7 ` +
+      `${s.openings_bound}/${s.openings_total} openings`;
+
+    // Populate the viewpoint list on every load - it depends on the project, so
+    // it must happen before the `wired` latch below short-circuits.
+    const viewSel = document.getElementById("massing-view");
+    viewSel.innerHTML = "";
+    for (const vp of meta.viewpoints || []) {
+      const opt = document.createElement("option");
+      opt.value = vp.id;
+      opt.textContent = vp.name || vp.id;
+      viewSel.appendChild(opt);
+    }
+    viewSel.value = "PLAN";
+    document.getElementById("massing-ceiling").checked = false;
+
+    // An assumed ceiling height is the one unbounded, undetectable error in the
+    // model, so it stays visible in the viewport rather than in a log line.
+    if (p.not_for_construction) {
+      const weak = p.weakest || {};
+      const pct = Math.round((p.model_confidence || 0) * 100);
+      badgeEl.textContent =
+        `Massing model \u00b7 confidence ${pct}% \u00b7 ` +
+        `weakest: ${weak.field || "?"} = ${weak.value} (${weak.source || "?"}, ` +
+        `${weak.rule_id || "?"}) \u00b7 not for construction`;
+      badgeEl.hidden = false;
+    } else {
+      badgeEl.hidden = true;
+    }
+
+    if (wired) return;
+    wired = true;
+    const bind = (id, group) =>
+      document.getElementById(id).addEventListener("change", (ev) =>
+        api.getViewer().setGroupVisible(group, ev.target.checked)
+      );
+    bind("massing-walls", "walls");
+    bind("massing-fixtures", "fixtures");
+    bind("massing-ceiling", "ceiling");
+    bind("massing-floor", "floor");
+    document.getElementById("massing-view").addEventListener("change", (ev) =>
+      api.getViewer().applyViewpoint(ev.target.value)
+    );
+    document.getElementById("massing-labels").addEventListener("change", (ev) =>
+      api.getViewer().setLabelsVisible(ev.target.checked)
+    );
+    document.getElementById("massing-fit").addEventListener("click", () =>
+      api.getViewer().frame()
+    );
+    document.getElementById("massing-shot").addEventListener("click", () =>
+      api.getViewer().screenshot(`planforge_${projectId.slice(0, 8)}_3d.png`)
+    );
+
+    // Click-to-SKU. describeMesh() merges geometry.userData (where trimesh
+    // writes glTF primitive extras) with object.userData, so this reads the
+    // same {label, kind, fixture_type, width_mm, ...} the resolution log used
+    // to build the model - no separate lookup, no backend round-trip.
+    api.getViewer().onPick((info, mesh) => {
+      if (!info || !mesh) {
+        pickEl.hidden = true;
+        return;
+      }
+      pickBody.innerHTML = renderPickInfo(info, mesh.name);
+      pickEl.hidden = false;
+    });
+    document.getElementById("massing-pick-close").addEventListener("click", () => {
+      pickEl.hidden = true;
+      api.getViewer().clearPick();
+    });
+  }
+
+  // Local copy: escHtml lives in a sibling IIFE further down this script and
+  // is not in scope here.
+  function escHtmlLocal(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function row(label, value) {
+    if (value === undefined || value === null || value === "") return "";
+    return `<div class="massing-pick-row"><span>${escHtmlLocal(label)}</span><b>${escHtmlLocal(String(value))}</b></div>`;
+  }
+
+  function renderPickInfo(info, nodeName) {
+    const dims = [info.width_mm, info.depth_mm, info.height_mm]
+      .filter((v) => v !== undefined && v !== null)
+      .map((v) => Math.round(v));
+    const dimStr = dims.length === 3 ? `${dims[0]} × ${dims[1]} × ${dims[2]} mm` : "";
+
+    let geom = "";
+    if (info.geometry_source === "authored_asset") {
+      geom = `authored asset · fit: ${info.fit_method || "?"}` +
+        (info.fit_scale ? ` (×${Number(info.fit_scale).toFixed(2)})` : "");
+    } else if (info.geometry_source === "parametric_bands") {
+      geom = "parametric band" + (info.band ? ` · ${info.band}` : "");
+    }
+
+    const title = info.label || info.fixture_type || nodeName || "Fixture";
+    return (
+      `<div class="massing-pick-title">${escHtmlLocal(title)}</div>` +
+      row("Type", info.fixture_type) +
+      row("Matched by", info.type_rule) +
+      row("Kind (source)", info.kind) +
+      row("Dimensions", dimStr) +
+      row("Elevation", info.elevation_mm != null ? `${Math.round(info.elevation_mm)} mm` : "") +
+      row("Geometry", geom) +
+      row("Node", nodeName)
+    );
+  }
+})();
+
+// ── Photoreal tab (Stage 2: Blender/Cycles, rendered server-side) ────────
+// No client-side 3D library here -- the browser only ever fetches a PNG.
+// The render runs as a background job on the server; this polls status and
+// swaps the image in once it's done.
+(function () {
+  const emptyEl  = document.getElementById("photoreal-empty");
+  const imgEl    = document.getElementById("photoreal-image");
+  const genBtn   = document.getElementById("photoreal-generate");
+  const statusEl = document.getElementById("photoreal-status");
+  const dlEl     = document.getElementById("photoreal-download");
+  const viewSel  = document.getElementById("photoreal-view");
+
+  // Still / Turntable sub-tabs, nested inside the Photoreal tab.
+  const modeStillBtn = document.getElementById("photoreal-mode-still");
+  const modeTtBtn     = document.getElementById("photoreal-mode-turntable");
+  const stillPanel    = document.getElementById("photoreal-still-panel");
+  const ttPanel        = document.getElementById("photoreal-turntable-panel");
+  modeStillBtn.addEventListener("click", () => {
+    modeStillBtn.classList.add("active");
+    modeTtBtn.classList.remove("active");
+    stillPanel.hidden = false;
+    ttPanel.hidden = true;
+  });
+  modeTtBtn.addEventListener("click", () => {
+    modeTtBtn.classList.add("active");
+    modeStillBtn.classList.remove("active");
+    ttPanel.hidden = false;
+    stillPanel.hidden = true;
+  });
+
+  let projectId = null;
+  let pollTimer = null;
+  let startedAt = null;
+
+  window._photorealViewerReady = function (pid) {
+    projectId = pid;
+    stopPolling();
+    imgEl.hidden = true;
+    dlEl.hidden = true;
+    emptyEl.hidden = false;
+    emptyEl.textContent =
+      "Renders the current layout with Blender/Cycles — real lighting, reflections and " +
+      "materials instead of the flat preview in the 3D Massing tab. Click Generate to start.";
+    statusEl.textContent = "";
+    genBtn.disabled = false;
+
+    // Same named viewpoints (PLAN, A-D) the 3D Massing tab's own dropdown
+    // offers — fetched independently here since this tab may be opened
+    // before that one ever is.
+    viewSel.innerHTML = "";
+    fetch(`/output/${pid}/massing-meta`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((meta) => {
+        for (const vp of (meta && meta.viewpoints) || []) {
+          const opt = document.createElement("option");
+          opt.value = vp.id;
+          opt.textContent = vp.name || vp.id;
+          viewSel.appendChild(opt);
+        }
+        if (viewSel.querySelector('option[value="PLAN"]')) viewSel.value = "PLAN";
+      })
+      .catch(() => {});
+
+    resetTurntableUi();
+  };
+
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  async function apiError(res) {
+    try {
+      const j = await res.json();
+      return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail ?? j);
+    } catch {
+      return await res.text();
+    }
+  }
+
+  function showRender(pid) {
+    const url = `/output/${pid}/render.png?t=${Date.now()}`; // cache-bust: same URL every render
+    imgEl.src = url;
+    imgEl.hidden = false;
+    emptyEl.hidden = true;
+    dlEl.href = url;
+    dlEl.download = `planforge_${pid.slice(0, 8)}_photoreal.png`;
+    dlEl.hidden = false;
+  }
+
+  async function poll(pid) {
+    let res;
+    try {
+      res = await fetch(`/output/${pid}/render/status`);
+    } catch (e) {
+      statusEl.textContent = "Lost connection to the server.";
+      return;
+    }
+    if (!res.ok) {
+      stopPolling();
+      statusEl.textContent = "Status check failed.";
+      genBtn.disabled = false;
+      return;
+    }
+    const s = await res.json();
+    if (s.status === "running") {
+      const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 1000) : s.elapsed_s;
+      statusEl.textContent = `Rendering ${s.viewpoint_id || ""}… ${elapsed}s elapsed (usually ~1 min on a CPU-only machine)`;
+    } else if (s.status === "done") {
+      stopPolling();
+      statusEl.textContent = `Done · ${s.viewpoint_id || "PLAN"} · ${s.samples} samples · ${s.width}×${s.height}`;
+      genBtn.disabled = false;
+      showRender(pid);
+    } else if (s.status === "error") {
+      stopPolling();
+      statusEl.textContent = `Render failed: ${s.error || "unknown error"}`;
+      genBtn.disabled = false;
+    }
+  }
+
+  genBtn.addEventListener("click", async () => {
+    if (!projectId) { statusEl.textContent = "Run the pipeline first."; return; }
+    genBtn.disabled = true;
+    statusEl.textContent = "Starting…";
+    startedAt = Date.now();
+    const viewpointId = viewSel.value || "";
+    const qs = viewpointId ? `?viewpoint_id=${encodeURIComponent(viewpointId)}` : "";
+    try {
+      const res = await fetch(`/output/${projectId}/render${qs}`, { method: "POST" });
+      if (!res.ok) {
+        const msg = await apiError(res);
+        statusEl.textContent = res.status === 503
+          ? "Blender is not installed on this server. Run scripts/setup_blender.sh."
+          : `Could not start render: ${msg}`;
+        genBtn.disabled = false;
+        return;
+      }
+      const started = await res.json();
+      statusEl.textContent =
+        `Rendering ${started.viewpoint_id || ""}… 0s elapsed (${started.samples} samples, ${started.width}×${started.height})`;
+      stopPolling();
+      pollTimer = setInterval(() => poll(projectId), 2000);
+    } catch (e) {
+      statusEl.textContent = "Could not reach the server.";
+      genBtn.disabled = false;
+    }
+  });
+
+  window._photorealTabActivated = function () {
+    // A render already in flight (started before this tab was opened) should
+    // resume being tracked, not silently drop out of view.
+    if (projectId && !pollTimer) {
+      fetch(`/output/${projectId}/render/status`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((s) => {
+          if (!s) return;
+          if (s.viewpoint_id && viewSel.querySelector(`option[value="${s.viewpoint_id}"]`)) {
+            viewSel.value = s.viewpoint_id;
+          }
+          if (s.status === "running") {
+            genBtn.disabled = true;
+            pollTimer = setInterval(() => poll(projectId), 2000);
+          } else if (s.status === "done") {
+            statusEl.textContent = s.restored_from_disk
+              ? `Done (from a previous render) · ${s.viewpoint_id || ""}`
+              : `Done · ${s.viewpoint_id || ""} · ${s.samples || ""} samples`;
+            showRender(projectId);
+          }
+        })
+        .catch(() => {});
+    }
+    if (projectId && !ttPollTimer) pollTurntableOnce(projectId, true);
+  };
+
+  // ── Turntable: pre-rendered 360° lap, stitched into a looping GIF ──────
+  const ttEmptyEl  = document.getElementById("turntable-empty");
+  const ttImgEl    = document.getElementById("turntable-image");
+  const ttGenBtn   = document.getElementById("turntable-generate");
+  const ttCancelBtn = document.getElementById("turntable-cancel");
+  const ttStatusEl = document.getElementById("turntable-status");
+  const ttDlEl     = document.getElementById("turntable-download");
+
+  let ttPollTimer = null;
+  let ttStartedAt = null;
+
+  function resetTurntableUi() {
+    stopTurntablePolling();
+    ttImgEl.hidden = true;
+    ttDlEl.hidden = true;
+    ttCancelBtn.hidden = true;
+    ttEmptyEl.hidden = false;
+    ttStatusEl.textContent = "";
+    ttGenBtn.disabled = false;
+  }
+
+  function stopTurntablePolling() {
+    if (ttPollTimer) { clearInterval(ttPollTimer); ttPollTimer = null; }
+  }
+
+  function showTurntable(pid) {
+    const url = `/output/${pid}/turntable.gif?t=${Date.now()}`;
+    ttImgEl.src = url;
+    ttImgEl.hidden = false;
+    ttEmptyEl.hidden = true;
+    ttDlEl.href = url;
+    ttDlEl.download = `planforge_${pid.slice(0, 8)}_turntable.gif`;
+    ttDlEl.hidden = false;
+  }
+
+  async function pollTurntableOnce(pid, isReconnect) {
+    let res;
+    try {
+      res = await fetch(`/output/${pid}/turntable/status`);
+    } catch (e) {
+      ttStatusEl.textContent = "Lost connection to the server.";
+      return;
+    }
+    if (!res.ok) {
+      stopTurntablePolling();
+      ttStatusEl.textContent = "Status check failed.";
+      ttGenBtn.disabled = false;
+      ttCancelBtn.hidden = true;
+      return;
+    }
+    const s = await res.json();
+    if (s.status === "running") {
+      ttGenBtn.disabled = true;
+      ttCancelBtn.hidden = false;
+      const elapsed = ttStartedAt ? Math.round((Date.now() - ttStartedAt) / 1000) : s.elapsed_s;
+      ttStatusEl.textContent =
+        `Rendering frame ${s.frames_done || 0}/${s.frames_total || "?"}… ${elapsed}s elapsed`;
+      if (isReconnect && !ttPollTimer) ttPollTimer = setInterval(() => pollTurntableOnce(pid), 3000);
+    } else if (s.status === "done") {
+      stopTurntablePolling();
+      ttGenBtn.disabled = false;
+      ttCancelBtn.hidden = true;
+      ttStatusEl.textContent = s.restored_from_disk
+        ? "Done (from a previous render)"
+        : `Done · ${s.frames_total || s.frames || ""} frames`;
+      showTurntable(pid);
+    } else if (s.status === "error") {
+      stopTurntablePolling();
+      ttGenBtn.disabled = false;
+      ttCancelBtn.hidden = true;
+      ttStatusEl.textContent = `Turntable failed: ${s.error || "unknown error"}`;
+    } else if (s.status === "cancelled") {
+      stopTurntablePolling();
+      ttGenBtn.disabled = false;
+      ttCancelBtn.hidden = true;
+      ttStatusEl.textContent = `Cancelled after ${s.frames_done || 0}/${s.frames_total || "?"} frames`;
+    }
+  }
+
+  ttGenBtn.addEventListener("click", async () => {
+    if (!projectId) { ttStatusEl.textContent = "Run the pipeline first."; return; }
+    ttGenBtn.disabled = true;
+    ttStatusEl.textContent = "Starting…";
+    ttStartedAt = Date.now();
+    try {
+      const res = await fetch(`/output/${projectId}/turntable`, { method: "POST" });
+      if (!res.ok) {
+        const msg = await apiError(res);
+        ttStatusEl.textContent = res.status === 503
+          ? "Blender is not installed on this server. Run scripts/setup_blender.sh."
+          : res.status === 409
+            ? "A turntable render is already running for this project."
+            : `Could not start turntable: ${msg}`;
+        ttGenBtn.disabled = false;
+        return;
+      }
+      const started = await res.json();
+      ttStatusEl.textContent = `Rendering frame 0/${started.frames_total}… 0s elapsed`;
+      ttCancelBtn.hidden = false;
+      stopTurntablePolling();
+      ttPollTimer = setInterval(() => pollTurntableOnce(projectId), 3000);
+    } catch (e) {
+      ttStatusEl.textContent = "Could not reach the server.";
+      ttGenBtn.disabled = false;
+    }
+  });
+
+  ttCancelBtn.addEventListener("click", async () => {
+    if (!projectId) return;
+    ttCancelBtn.disabled = true;
+    try {
+      await fetch(`/output/${projectId}/turntable/cancel`, { method: "POST" });
+      ttStatusEl.textContent = "Cancelling…";
+    } catch (e) {
+      // Polling will keep reporting the real state either way.
+    } finally {
+      ttCancelBtn.disabled = false;
+    }
+  });
+})();
+
+// ── AI Model panel ──────────────────────────────────────────────
+(function () {
+  const llmToggle  = document.getElementById("llm-toggle");
+  const llmIcon    = document.getElementById("llm-toggle-icon");
+  const llmBody    = document.getElementById("llm-body");
+  const llmBadge   = document.getElementById("llm-badge");
+  const modeSel    = document.getElementById("llm-mode-sel");
+  const btnSave    = document.getElementById("btn-save-llm");
+  const saveMsg    = document.getElementById("llm-save-msg");
+  const btnTest    = document.getElementById("btn-test-llm");
+  const testResult = document.getElementById("llm-test-result");
+
+  const BADGE_COLOR = { ollama: "#22c55e", openai: "#38bdf8", gemini: "#a78bfa", none: "#64748b" };
+  const BADGE_LABEL = { ollama: "Ollama", openai: "OpenAI", gemini: "Gemini", none: "Heuristic", env: "env" };
+
+  let selectedProvider = "none";
+
+  llmToggle.addEventListener("click", () => {
+    llmBody.hidden = !llmBody.hidden;
+    llmIcon.textContent = llmBody.hidden ? "▶" : "▼";
+  });
+
+  function applyConfig(cfg) {
+    const active = cfg.active_provider || "none";
+    selectedProvider = active;
+
+    // Update provider buttons
+    document.querySelectorAll(".llm-provider-btn").forEach((btn) => {
+      const p = btn.dataset.provider;
+      const avail = p === "none" || cfg.available?.[p];
+      btn.disabled = !avail;
+      btn.classList.toggle("active", p === active);
+
+      // Fill sub-label with model name
+      const detail = cfg.details?.[p];
+      const subEl = btn.querySelector(".llm-btn-sub");
+      if (subEl && detail) subEl.textContent = detail.model || detail.host || "—";
+      if (subEl && p === "none") subEl.textContent = "No LLM";
+      if (subEl && !detail && p !== "none") subEl.textContent = "Not configured";
+    });
+
+    // Normalize mode
+    modeSel.value = cfg.normalize_mode || "llm_labels_only";
+
+    // Badge in heading
+    const displayProvider = active === "env" ? (cfg.available?.ollama ? "ollama" : "none") : active;
+    llmBadge.textContent = BADGE_LABEL[displayProvider] || displayProvider;
+    llmBadge.style.color = BADGE_COLOR[displayProvider] || "#94a3b8";
+  }
+
+  // Provider card click
+  document.querySelectorAll(".llm-provider-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      selectedProvider = btn.dataset.provider;
+      document.querySelectorAll(".llm-provider-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.provider === selectedProvider)
+      );
+    });
+  });
+
+  // Save
+  btnSave.addEventListener("click", async () => {
+    saveMsg.textContent = "Saving…";
+    saveMsg.style.color = "#94a3b8";
+    try {
+      const r = await fetch("/api/llm-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: selectedProvider, normalize_mode: modeSel.value }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || r.statusText);
+      }
+      const data = await r.json();
+      applyConfig({ active_provider: data.active_provider, normalize_mode: data.normalize_mode });
+      saveMsg.textContent = "Saved.";
+      saveMsg.style.color = "#4ade80";
+      // Re-fetch full config to refresh available/details
+      fetch("/api/llm-config").then((r) => r.json()).then(applyConfig).catch(() => {});
+    } catch (e) {
+      saveMsg.textContent = e.message || "Save failed.";
+      saveMsg.style.color = "#f87171";
+    }
+  });
+
+  // Test connection
+  btnTest.addEventListener("click", async () => {
+    testResult.hidden = false;
+    testResult.style.borderColor = "#334155";
+    testResult.innerHTML = "<span style='color:#94a3b8'>Testing… sending a real prompt to the active provider.</span>";
+    btnTest.disabled = true;
+    try {
+      const r = await fetch("/api/llm-test", { method: "POST" });
+      const d = await r.json();
+      if (d.ok) {
+        const lines = [
+          `<span style='color:#4ade80'>✓ Connected — AI is live</span>`,
+          `<span style='color:#94a3b8'>Provider :</span> <span style='color:#e2e8f0'>${d.provider}</span>`,
+          `<span style='color:#94a3b8'>Model    :</span> <span style='color:#e2e8f0'>${d.model}</span>`,
+          d.host ? `<span style='color:#94a3b8'>Host     :</span> <span style='color:#e2e8f0'>${d.host}</span>` : "",
+          d.url  ? `<span style='color:#94a3b8'>URL      :</span> <span style='color:#e2e8f0'>${escHtml(d.url)}</span>` : "",
+          `<span style='color:#94a3b8'>Response :</span> <span style='color:#fde68a'>${escHtml(d.response || "")}</span>`,
+        ].filter(Boolean);
+        testResult.style.borderColor = "#22c55e";
+        testResult.innerHTML = lines.join("<br>");
+      } else {
+        testResult.style.borderColor = "#ef4444";
+        testResult.innerHTML = [
+          `<span style='color:#f87171'>✗ Failed</span>`,
+          `<span style='color:#94a3b8'>Provider :</span> <span style='color:#e2e8f0'>${d.provider}</span>`,
+          d.model ? `<span style='color:#94a3b8'>Model    :</span> <span style='color:#e2e8f0'>${d.model}</span>` : "",
+          d.url   ? `<span style='color:#94a3b8'>URL      :</span> <span style='color:#e2e8f0'>${escHtml(d.url)}</span>` : "",
+          `<span style='color:#94a3b8'>Error    :</span> <span style='color:#fca5a5'>${escHtml(d.error || "unknown")}</span>`,
+          d.raw   ? `<span style='color:#94a3b8'>Raw body :</span> <span style='color:#fca5a5'>${escHtml(d.raw)}</span>` : "",
+        ].filter(Boolean).join("<br>");
+      }
+    } catch (e) {
+      testResult.style.borderColor = "#ef4444";
+      testResult.innerHTML = `<span style='color:#f87171'>✗ Request failed: ${escHtml(String(e))}</span>`;
+    } finally {
+      btnTest.disabled = false;
+    }
+  });
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  // Initial load
+  fetch("/api/llm-config")
+    .then((r) => r.json())
+    .then(applyConfig)
+    .catch(() => {
+      llmBadge.textContent = "error";
+      llmBadge.style.color = "#f87171";
+    });
+})();
+</script>
+
+<script>
+// ── DXF Viewer ─────────────────────────────────────────────────────────────
+(function () {
+  "use strict";
+
+  // Standard AutoCAD Color Index → hex
+  const ACI = {
+    0:"#FFFFFF",1:"#FF3333",2:"#FFFF33",3:"#33FF33",4:"#33FFFF",
+    5:"#4488FF",6:"#FF33FF",7:"#FFFFFF",8:"#808080",9:"#C0C0C0",
+    10:"#FF7F7F",20:"#FF9933",30:"#FFD700",40:"#BFFF00",50:"#80FF00",
+    60:"#40FF40",70:"#00FF80",80:"#00FFBF",90:"#00FFFF",100:"#00BFFF",
+    110:"#0080FF",120:"#0040FF",130:"#4040FF",140:"#8000FF",150:"#BF00FF",
+    160:"#FF00BF",170:"#FF0080",180:"#FF0040",
+    250:"#333333",251:"#555555",252:"#7F7F7F",253:"#AAAAAA",254:"#D5D5D5",255:"#F0F0F0",
+  };
+  function aciHex(n) { return ACI[n] || "#AAAAAA"; }
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let _pid=null, _dxf=null, _vis={};
+  let _tx=0, _ty=0, _scale=1;
+  let _ext={minX:0,maxX:1000,minY:0,maxY:1000};
+  let _drag=false, _dx0=0, _dy0=0, _tx0=0, _ty0=0;
+  let _didDrag = false;                 // true when mousedown moved enough to be a pan
+  let _placedTexts = [];                // screen-space bounding boxes of already-drawn text labels
+  let _selectedHandle = null;           // handle of the highlighted DIMENSION entity
+  let _dimHitBoxes = [];                // [{handle, x1, y1, x2, y2}] repopulated each render
+
+  const canvas  = document.getElementById("dxf-canvas");
+  const ctx     = canvas.getContext("2d");
+  const layerEl = document.getElementById("dxf-layers-list");
+  const zoomEl  = document.getElementById("dxf-zoom-label");
+  const coordEl = document.getElementById("dxf-coords");
+  const statEl  = document.getElementById("dxf-load-status");
+
+  // ── Coordinate helpers ────────────────────────────────────────────────────
+  const sx  = dx => _tx + dx * _scale;
+  const sy  = dy => _ty - dy * _scale;
+  const dxS = px => (px - _tx) / _scale;
+  const dyS = py => (_ty - py) / _scale;
+
+  // ── Entity color ──────────────────────────────────────────────────────────
+  function entityColor(e) {
+    if (e.colorHex) return "#" + e.colorHex;
+    if (e.color && e.color !== 256 && e.color !== 0) return aciHex(e.color);
+    const ld = (_dxf?.tables?.layer?.layers || {})[e.layer || "0"];
+    if (!ld) return "#CCCCCC";
+    return ld.colorHex ? "#" + ld.colorHex : aciHex(ld.color);
+  }
+
+  // ── Extents ───────────────────────────────────────────────────────────────
+  function calcExtents(entities) {
+    let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+    const ex=(x,y)=>{if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;};
+    for (const e of entities) {
+      if (e.type==="LINE"||(e.type==="LWPOLYLINE"||e.type==="POLYLINE"))
+        (e.vertices||[]).forEach(v=>ex(v.x,v.y));
+      else if (e.type==="ARC"||e.type==="CIRCLE") {
+        const c=e.center||{x:0,y:0},r=e.radius||0; ex(c.x-r,c.y-r); ex(c.x+r,c.y+r);
+      } else {
+        const p=e.startPoint||e.position||e.anchorPoint||e.middleOfText||{};
+        if (p.x!==undefined) ex(p.x,p.y||0);
+      }
+    }
+    if (!isFinite(x0)){x0=0;x1=1000;y0=0;y1=1000;}
+    const pad=Math.max(x1-x0,y1-y0)*0.05||50;
+    return {minX:x0-pad,maxX:x1+pad,minY:y0-pad,maxY:y1+pad};
+  }
+
+  // ── Fit ───────────────────────────────────────────────────────────────────
+  function fit() {
+    const W=canvas.width,H=canvas.height,dw=_ext.maxX-_ext.minX,dh=_ext.maxY-_ext.minY;
+    if(!W||!H||!dw||!dh) return;
+    _scale=Math.min(W/dw,H/dh)*0.9;
+    _tx=W/2-((_ext.minX+_ext.maxX)/2)*_scale;
+    _ty=H/2+((_ext.minY+_ext.maxY)/2)*_scale;
+    updateZoom();
+  }
+  function updateZoom(){zoomEl.textContent=(_scale>=1?_scale.toFixed(1):_scale.toPrecision(2))+"x";}
+
+  // ── Grid ──────────────────────────────────────────────────────────────────
+  function drawGrid(W,H) {
+    const raw=60/_scale,mag=Math.pow(10,Math.floor(Math.log10(raw)));
+    let sp=mag;
+    if(raw/mag>5)sp=mag*10;else if(raw/mag>2)sp=mag*5;else if(raw/mag>1)sp=mag*2;
+    if(sp*_scale<12) return;
+    ctx.strokeStyle="#16202e"; ctx.lineWidth=0.5;
+    for(let i=0,v=Math.floor(dxS(0)/sp)*sp;i<500;i++,v+=sp){const p=sx(v);if(p>W+1)break;if(p>=0){ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,H);ctx.stroke();}}
+    for(let i=0,v=Math.floor(dyS(H)/sp)*sp;i<500;i++,v+=sp){const p=sy(v);if(p<-1)break;if(p<=H){ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(W,p);ctx.stroke();}}
+  }
+
+  // ── Line width from DXF lineweight (group code 370, in 1/100 mm) ─────────
+  function lwPx(e) {
+    const lw = e.lineweight;
+    if (lw && lw > 0) return Math.max(0.6, Math.min(lw * _scale / 300, 5));
+    return 0.9;
+  }
+
+  // ── Dimension helpers ─────────────────────────────────────────────────────
+
+  // Draw a text string with a dark background rectangle so it reads over geometry.
+  // screenX/Y are canvas coordinates. rotRad is already in canvas radians.
+  function drawTextLabelled(text, screenX, screenY, rotRad, h, col) {
+    ctx.save();
+    ctx.font = `${h}px Arial,sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.translate(screenX, screenY);
+    ctx.rotate(rotRad);
+    const tw = ctx.measureText(text).width;
+    const pad = Math.max(2, h * 0.2);
+    ctx.fillStyle = "rgba(10,14,20,0.88)";
+    ctx.fillRect(-tw / 2 - pad, -h / 2 - pad, tw + pad * 2, h + pad * 2);
+    ctx.fillStyle = col;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
+  // Draw perpendicular tick marks at both ends of a screen-space line segment.
+  function drawEndTicks(spx1, spy1, spx2, spy2, col) {
+    const slen = Math.hypot(spx2 - spx1, spy2 - spy1);
+    if (slen < 3) return;
+    const tux = (spx2 - spx1) / slen, tuy = (spy2 - spy1) / slen;
+    const tnx = -tuy, tny = tux; // screen-space normal
+    const ts = Math.max(5, Math.min(9, slen * 0.05));
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(spx1 + tnx * ts, spy1 + tny * ts); ctx.lineTo(spx1 - tnx * ts, spy1 - tny * ts);
+    ctx.moveTo(spx2 + tnx * ts, spy2 + tny * ts); ctx.lineTo(spx2 - tnx * ts, spy2 - tny * ts);
+    ctx.stroke();
+  }
+
+  // Full linear dimension renderer from raw DXF coordinate fields.
+  //   p1, p2     = extension-line origin points (the two ends being measured)
+  //   dp         = definition point (a point ON the dimension line — sets its offset)
+  //   text       = formatted measurement string
+  //   textH      = preferred font height in px (0 = auto)
+  //   col        = base stroke/fill colour
+  //   isSelected = true → draw in cyan highlight colour
+  // Returns screen-space bounding box {x1,y1,x2,y2} on success, false when data missing.
+  function drawLinearAnnotation(p1, p2, dp, text, textH, col, isSelected) {
+    if (!p1 || !p2 || !dp) return false;
+
+    const drawCol = isSelected ? "#38bdf8" : col; // cyan highlight when selected
+
+    // Direction along the span (measurement direction)
+    const mx = p2.x - p1.x, my = p2.y - p1.y;
+    const mlen = Math.hypot(mx, my);
+    if (mlen < 0.001) return false;
+    const mux = mx / mlen, muy = my / mlen;
+    const nux = -muy,     nuy =  mux;
+
+    // How far the dimension line is from the measured points (signed)
+    const offset = (dp.x - p1.x) * nux + (dp.y - p1.y) * nuy;
+    const sign = offset >= 0 ? 1 : -1;
+    const gap  = Math.max(Math.abs(offset) * 0.04, 0.5);
+
+    // Dimension line endpoints in DXF world coordinates
+    const d1x = p1.x + offset * nux,  d1y = p1.y + offset * nuy;
+    const d2x = p2.x + offset * nux,  d2y = p2.y + offset * nuy;
+
+    ctx.strokeStyle = drawCol; ctx.setLineDash([]);
+
+    // Extension lines
+    ctx.lineWidth = isSelected ? 1.2 : 0.7;
+    ctx.beginPath();
+    ctx.moveTo(sx(p1.x + sign * gap * nux), sy(p1.y + sign * gap * nuy));
+    ctx.lineTo(sx(d1x + sign * gap * nux),  sy(d1y + sign * gap * nuy));
+    ctx.moveTo(sx(p2.x + sign * gap * nux), sy(p2.y + sign * gap * nuy));
+    ctx.lineTo(sx(d2x + sign * gap * nux),  sy(d2y + sign * gap * nuy));
+    ctx.stroke();
+
+    // Dimension line
+    ctx.lineWidth = isSelected ? 1.6 : 1.0;
+    ctx.beginPath(); ctx.moveTo(sx(d1x), sy(d1y)); ctx.lineTo(sx(d2x), sy(d2y)); ctx.stroke();
+
+    // Tick marks
+    ctx.strokeStyle = drawCol;
+    drawEndTicks(sx(d1x), sy(d1y), sx(d2x), sy(d2y), drawCol);
+
+    // Centred label
+    if (text) {
+      const tmx = (d1x + d2x) / 2, tmy = (d1y + d2y) / 2;
+      const rot = Math.atan2(-muy, mux);
+      const h = textH > 0 ? textH : Math.max(6, Math.min(mlen * _scale * 0.05, 20));
+      drawTextLabelled(text, sx(tmx), sy(tmy), rot, h, drawCol);
+    }
+
+    // Return screen bounding box for hit-testing (covers dim line + extension line area)
+    const xs = [sx(p1.x), sx(p2.x), sx(d1x), sx(d2x)];
+    const ys = [sy(p1.y), sy(p2.y), sy(d1y), sy(d2y)];
+    const pad = 12;
+    return { x1: Math.min(...xs) - pad, y1: Math.min(...ys) - pad,
+             x2: Math.max(...xs) + pad, y2: Math.max(...ys) + pad };
+  }
+
+  // ── Draw one entity ───────────────────────────────────────────────────────
+  function drawEntity(e, blocks, col, depth) {
+    ctx.strokeStyle=col; ctx.fillStyle=col;
+    const DEG=Math.PI/180;
+    switch(e.type) {
+      case "LINE": {
+        const v=e.vertices||[]; if(v.length<2)break;
+        ctx.lineWidth=lwPx(e); ctx.beginPath(); ctx.moveTo(sx(v[0].x),sy(v[0].y)); ctx.lineTo(sx(v[1].x),sy(v[1].y)); ctx.stroke(); break;
+      }
+      case "LWPOLYLINE": case "POLYLINE": {
+        const v=e.vertices||[]; if(v.length<2)break;
+        ctx.lineWidth=lwPx(e); ctx.beginPath(); ctx.moveTo(sx(v[0].x),sy(v[0].y));
+        for(let i=1;i<v.length;i++) ctx.lineTo(sx(v[i].x),sy(v[i].y));
+        if(e.closed||e.shape) ctx.closePath(); ctx.stroke(); break;
+      }
+      case "ARC": {
+        const c=e.center||{x:0,y:0},r=(e.radius||0)*_scale; if(r<0.4)break;
+        ctx.lineWidth=lwPx(e); ctx.beginPath();
+        ctx.arc(sx(c.x),sy(c.y),r,-e.startAngle,-e.endAngle,true); ctx.stroke(); break;
+      }
+      case "CIRCLE": {
+        const c=e.center||{x:0,y:0},r=(e.radius||0)*_scale; if(r<0.4)break;
+        ctx.lineWidth=lwPx(e); ctx.beginPath(); ctx.arc(sx(c.x),sy(c.y),r,0,Math.PI*2); ctx.stroke(); break;
+      }
+      case "TEXT": {
+        const pt = e.startPoint || e.endPoint || {};
+        // Cap font: never smaller than 4px or larger than 48px on screen
+        const h = Math.max(4, Math.min((e.textHeight || 2.5) * _scale, 48));
+        if (h < 3) break;
+        ctx.font = `${h}px Arial,sans-serif`;
+        const ha = e.halign || 0, va = e.valign || 0;
+        // ha: 0=left 1=center 2=right 3=aligned 4=middle 5=fit
+        ctx.textAlign     = ha === 2 ? "right" : (ha >= 1 && ha <= 5) ? "center" : "left";
+        // va: 0=baseline 1=bottom 2=middle 3=top
+        ctx.textBaseline  = va === 3 ? "top" : va === 2 ? "middle" : va === 1 ? "bottom" : "alphabetic";
+        // When ha≠0 DXF uses the alignment/endpoint as anchor
+        const anchor = (ha > 0 && e.endPoint) ? e.endPoint : pt;
+        const cx = sx(anchor.x || 0), cy = sy(anchor.y || 0);
+        const label = e.text || "";
+        // Overlap avoidance for top-level (non-block) text
+        if (!depth) {
+          const tw = ctx.measureText(label).width;
+          const bx = ctx.textAlign === "right" ? cx - tw : ctx.textAlign === "center" ? cx - tw / 2 : cx;
+          const by = ctx.textBaseline === "top" ? cy : ctx.textBaseline === "middle" ? cy - h / 2 : cy - h;
+          if (_placedTexts.some(b => bx < b.x2 + 1 && bx + tw > b.x1 - 1 && by < b.y2 + 1 && by + h > b.y1 - 1)) break;
+          _placedTexts.push({ x1: bx, y1: by, x2: bx + tw, y2: by + h });
+        }
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-(e.rotation || 0) * DEG);
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+        break;
+      }
+      case "MTEXT": {
+        const pt = e.position || {};
+        const h = Math.max(4, Math.min((e.height || 2.5) * _scale, 48));
+        if (h < 3) break;
+        ctx.font = `${h}px Arial,sans-serif`;
+        // Strip MTEXT inline codes: \P=newline, \Xxx; codes, braces
+        const raw = (e.text || "")
+          .replace(/\\P/gi, "\n")
+          .replace(/\\[A-Za-z][^;]*;/g, "")
+          .replace(/[{}]/g, "")
+          .replace(/\\\\/g, "\\")
+          .trim();
+        const lines = raw.split("\n").filter(s => s.trim());
+        // Attachment point: 1-3=top row, 4-6=middle row, 7-9=bottom row; col 1,4,7=left 2,5,8=center 3,6,9=right
+        const ap = e.attachmentPoint || 1;
+        ctx.textAlign    = (ap === 2 || ap === 5 || ap === 8) ? "center"
+                         : (ap === 3 || ap === 6 || ap === 9) ? "right" : "left";
+        ctx.textBaseline = ap <= 3 ? "top" : ap <= 6 ? "middle" : "bottom";
+        const cx = sx(pt.x || 0), cy = sy(pt.y || 0);
+        if (!depth && lines.length) {
+          const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+          const th = lines.length * h * 1.2;
+          const bx = ctx.textAlign === "right" ? cx - tw : ctx.textAlign === "center" ? cx - tw / 2 : cx;
+          const by = ctx.textBaseline === "top" ? cy : ctx.textBaseline === "middle" ? cy - th / 2 : cy - th;
+          if (_placedTexts.some(b => bx < b.x2 + 1 && bx + tw > b.x1 - 1 && by < b.y2 + 1 && by + th > b.y1 - 1)) break;
+          _placedTexts.push({ x1: bx, y1: by, x2: bx + tw, y2: by + th });
+        }
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-(e.rotation || 0) * DEG);
+        lines.forEach((ln, i) => ctx.fillText(ln, 0, i * h * 1.2));
+        ctx.restore();
+        break;
+      }
+      case "DIMENSION": {
+        // ── Step 1: collect the display text ────────────────────────────────
+        // Entity field 'text' holds an override; "<>" means "use automatic".
+        // The automatic value lives as a TEXT entity inside the anonymous block.
+        let dimText = (e.text || "").replace(/^<>$/, "").trim();
+        let textH = 0;
+        const blkEnts = (e.block && blocks[e.block]) ? (blocks[e.block].entities || []) : [];
+        for (const be of blkEnts) {
+          if (be.type !== "TEXT" && be.type !== "MTEXT") continue;
+          if (!dimText) {
+            dimText = be.type === "MTEXT"
+              ? (be.text || "").replace(/\\P/gi, " ").replace(/\\[A-Za-z][^;]*;/g, "").replace(/[{}]/g, "").trim()
+              : (be.text || "").trim();
+          }
+          textH = Math.max(6, Math.min((be.textHeight || be.height || 2.5) * _scale, 32));
+          break;
+        }
+
+        // ── Step 2: try the clean from-scratch renderer ──────────────────────
+        // Raw DXF group-code fields (names used by dxf-parser):
+        //   GC 13 → linearOrAngularPoint1   first extension-line origin
+        //   GC 14 → linearOrAngularPoint2   second extension-line origin
+        //   GC 10 → anchorPoint             a point that lies on the dimension line
+        //   GC 42 → actualMeasurement       numeric value (use if block text unavailable)
+        const p1 = e.linearOrAngularPoint1;
+        const p2 = e.linearOrAngularPoint2;
+        const dp = e.anchorPoint;  // GC 10 = definition point on the dimension line
+        if (!dimText && e.actualMeasurement !== undefined)
+          dimText = parseFloat(e.actualMeasurement.toFixed(2)).toString();
+        const isSelected = e.handle === _selectedHandle;
+        const dimBox = drawLinearAnnotation(p1, p2, dp, dimText, textH, col, isSelected);
+        if (dimBox) { _dimHitBoxes.push({ handle: e.handle, box: dimBox }); break; }
+
+        // ── Step 3: block-based fallback (draw geometry + forced ticks + text)
+        if (blkEnts.length) {
+          // Geometry (lines, arcs, solids) — skip text; we'll draw it ourselves
+          for (const be of blkEnts) {
+            const bl = be.layer || e.layer || "0"; if (_vis[bl] === false) continue;
+            if (be.type === "TEXT" || be.type === "MTEXT") continue;
+            drawEntity(be, blocks, entityColor(be), (depth || 0) + 1);
+          }
+          // Forced tick marks at the dim line endpoints
+          let longest = null, longestLen = 0;
+          for (const be of blkEnts) {
+            if (be.type !== "LINE") continue;
+            const v = be.vertices || []; if (v.length < 2) continue;
+            const l = Math.hypot(v[1].x - v[0].x, v[1].y - v[0].y);
+            if (l > longestLen) { longestLen = l; longest = v; }
+          }
+          if (longest) drawEndTicks(sx(longest[0].x), sy(longest[0].y), sx(longest[1].x), sy(longest[1].y), col);
+          // Text with background
+          if (dimText) {
+            const tp = e.middleOfText || e.anchorPoint;
+            const tx = tp ? tp.x : (longest ? (longest[0].x + longest[1].x) / 2 : 0);
+            const ty = tp ? tp.y : (longest ? (longest[0].y + longest[1].y) / 2 : 0);
+            drawTextLabelled(dimText, sx(tx), sy(ty), 0, textH || 10, col);
+          }
+          break;
+        }
+
+        // ── Step 4: last-resort crosshair ────────────────────────────────────
+        const pt = e.middleOfText || e.anchorPoint; if (!pt) break;
+        ctx.lineWidth = 0.8; ctx.strokeStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(sx(pt.x) - 5, sy(pt.y)); ctx.lineTo(sx(pt.x) + 5, sy(pt.y));
+        ctx.moveTo(sx(pt.x), sy(pt.y) - 5); ctx.lineTo(sx(pt.x), sy(pt.y) + 5);
+        ctx.stroke();
+        break;
+      }
+      case "SOLID": {
+        // DXF SOLID: 4 points stored as p0,p1,p2,p3
+        // Correct winding to avoid self-intersection: p0→p1→p3→p2
+        const pts=e.points||[]; if(pts.length<3)break;
+        ctx.beginPath();
+        ctx.moveTo(sx(pts[0].x||0),sy(pts[0].y||0));
+        ctx.lineTo(sx(pts[1].x||0),sy(pts[1].y||0));
+        if(pts[3]){ctx.lineTo(sx(pts[3].x||0),sy(pts[3].y||0));}
+        ctx.lineTo(sx(pts[2].x||0),sy(pts[2].y||0));
+        ctx.closePath(); ctx.fill(); break;
+      }
+      case "SPLINE": {
+        const cpts=e.controlPoints||[]; if(cpts.length<2)break;
+        ctx.lineWidth=lwPx(e); ctx.beginPath();
+        ctx.moveTo(sx(cpts[0].x||0),sy(cpts[0].y||0));
+        for(let i=1;i<cpts.length;i++) ctx.lineTo(sx(cpts[i].x||0),sy(cpts[i].y||0));
+        ctx.stroke(); break;
+      }
+      case "HATCH": {
+        const loops=e.boundaryPath||[]; ctx.globalAlpha=0.18; ctx.lineWidth=0.4;
+        for(const lp of loops){
+          if(lp.points&&lp.points.length>=2){
+            ctx.beginPath(); ctx.moveTo(sx(lp.points[0].x),sy(lp.points[0].y));
+            lp.points.slice(1).forEach(p=>ctx.lineTo(sx(p.x),sy(p.y)));
+            ctx.closePath(); ctx.fill();
+          }
+        }
+        ctx.globalAlpha=1; break;
+      }
+      case "INSERT": {
+        if((depth||0)>4) break;
+        const blk=blocks[e.name]; if(!blk) break;
+        const pos=e.position||{x:0,y:0};
+        const saveTX=_tx,saveTY=_ty;
+        _tx=_tx+(pos.x||0)*_scale; _ty=_ty-(pos.y||0)*_scale;
+        for(const be of (blk.entities||[])){
+          const bl=be.layer||e.layer||"0"; if(_vis[bl]===false) continue;
+          drawEntity(be,blocks,entityColor(be),(depth||0)+1);
+        }
+        _tx=saveTX; _ty=saveTY; break;
+      }
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  // Three separate passes so text always draws on top of geometry,
+  // and _placedTexts tracks occupied screen boxes to avoid label overlap.
+  const TEXT_TYPES = new Set(["TEXT", "MTEXT"]);
+  function render() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H); ctx.fillStyle = "#0d1117"; ctx.fillRect(0, 0, W, H);
+    if (!_dxf) {
+      ctx.fillStyle = "#374151"; ctx.font = "13px system-ui"; ctx.textAlign = "center";
+      ctx.fillText("Switch to DXF View after running the pipeline to load the drawing", W / 2, H / 2);
+      return;
+    }
+    drawGrid(W, H);
+    const blks = _dxf.blocks || {};
+    const ents = _dxf.entities || [];
+
+    // Pass 1 — geometry (lines, arcs, circles, polylines, hatches, inserts, solids, splines)
+    for (const e of ents) {
+      if (_vis[e.layer || "0"] === false) continue;
+      if (TEXT_TYPES.has(e.type) || e.type === "DIMENSION") continue;
+      drawEntity(e, blks, entityColor(e), 0);
+    }
+
+    // Pass 2 — dimension annotations (rendered from their anonymous blocks)
+    _dimHitBoxes = []; // reset each frame so stale boxes don't persist after pan/zoom
+    for (const e of ents) {
+      if (_vis[e.layer || "0"] === false) continue;
+      if (e.type !== "DIMENSION") continue;
+      drawEntity(e, blks, entityColor(e), 0);
+    }
+
+    // Pass 3 — text labels (TEXT + MTEXT) with overlap avoidance
+    _placedTexts = [];
+    for (const e of ents) {
+      if (_vis[e.layer || "0"] === false) continue;
+      if (!TEXT_TYPES.has(e.type)) continue;
+      drawEntity(e, blks, entityColor(e), 0);
+    }
+
+    // faint origin crosshair
+    ctx.strokeStyle = "#1e3a5f"; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(sx(0), 0); ctx.lineTo(sx(0), H);
+    ctx.moveTo(0, sy(0)); ctx.lineTo(W, sy(0)); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // ── Canvas resize ─────────────────────────────────────────────────────────
+  function resizeCanvas() {
+    const ws=canvas.parentElement,lp=document.getElementById("dxf-layers-panel");
+    // ws.offsetWidth is 0 when the DXF tab is hidden; fall back to the
+    // nearest visible ancestor so the canvas gets a real size on first render.
+    const containerW=ws.offsetWidth||ws.closest('.panel')?.offsetWidth||ws.parentElement?.offsetWidth||800;
+    const containerH=ws.offsetHeight||Math.max(320,window.innerHeight-260);
+    const W=Math.max(200,containerW-lp.offsetWidth-2);
+    const H=Math.max(200,containerH);
+    canvas.width=W; canvas.height=H;
+  }
+
+  // ── Layer panel ───────────────────────────────────────────────────────────
+  function buildLayerPanel() {
+    layerEl.innerHTML=""; if(!_dxf) return;
+    const tbl=_dxf.tables?.layer?.layers||{};
+    const names=new Set(Object.keys(tbl));
+    (_dxf.entities||[]).forEach(e=>names.add(e.layer||"0"));
+    [...names].sort().forEach(name=>{
+      const ld=tbl[name]||{}, col=ld.colorHex?"#"+ld.colorHex:aciHex(ld.color);
+      const vis=_vis[name]!==false;
+      const row=document.createElement("div"); row.className="dxf-layer-row"+(vis?"":" hidden-layer"); row.title=name;
+      const sw=document.createElement("div"); sw.className="dxf-layer-swatch"; sw.style.background=col;
+      const nm=document.createElement("span"); nm.className="dxf-layer-name"; nm.textContent=name;
+      const cb=document.createElement("input"); cb.type="checkbox"; cb.className="dxf-layer-check"; cb.checked=vis;
+      cb.addEventListener("change",()=>{_vis[name]=cb.checked;row.classList.toggle("hidden-layer",!cb.checked);render();});
+      row.addEventListener("click",ev=>{if(ev.target===cb)return;cb.checked=!cb.checked;_vis[name]=cb.checked;row.classList.toggle("hidden-layer",!cb.checked);render();});
+      row.append(sw,nm,cb); layerEl.appendChild(row);
+    });
+  }
+
+  // ── Dynamic library loader (handles browser cache of old CDN script tag) ──
+  function ensureDxfParser() {
+    return new Promise((resolve, reject) => {
+      // Already loaded
+      const ctor = typeof DxfParser === "function" ? DxfParser
+                 : (typeof DxfParser === "object" && DxfParser && typeof DxfParser.default === "function") ? DxfParser.default
+                 : null;
+      if (ctor) { resolve(ctor); return; }
+      // Inject a fresh script tag to bypass any cached failure
+      const s = document.createElement("script");
+      s.src = "/static/js/dxf-parser.js?v=1";
+      s.onload = () => {
+        const c = typeof DxfParser === "function" ? DxfParser
+                : (typeof DxfParser === "object" && DxfParser && typeof DxfParser.default === "function") ? DxfParser.default
+                : null;
+        if (c) resolve(c);
+        else reject(new Error("DxfParser not exported after load — check /static/js/dxf-parser.js"));
+      };
+      s.onerror = () => reject(new Error("Failed to load /static/js/dxf-parser.js (404 or network error)"));
+      document.head.appendChild(s);
+    });
+  }
+
+  // ── Load & parse ──────────────────────────────────────────────────────────
+  async function loadDxf() {
+    if(!_pid){statEl.textContent="Run the pipeline first.";return;}
+    statEl.textContent="Loading DXF…";
+    try {
+      const [DxfParserCtor, r] = await Promise.all([ensureDxfParser(), fetch(`/output/${_pid}/dxf`)]);
+      if(!r.ok) throw new Error(`HTTP ${r.status} fetching DXF`);
+      const text=await r.text();
+      _dxf=new DxfParserCtor().parseSync(text);
+      _vis={};
+      const tbl=_dxf.tables?.layer?.layers||{};
+      Object.keys(tbl).forEach(k=>_vis[k]=true);
+      (_dxf.entities||[]).forEach(e=>{const l=e.layer||"0";if(!(l in _vis))_vis[l]=true;});
+      _ext=calcExtents(_dxf.entities||[]);
+      resizeCanvas(); fit(); buildLayerPanel(); render();
+      statEl.textContent=`${(_dxf.entities||[]).length} entities · ${Object.keys(tbl).length} layers`;
+    } catch(err) {
+      statEl.textContent="Error: "+err.message; console.error("DXF viewer:",err);
+    }
+  }
+
+  // ── Zoom helper ───────────────────────────────────────────────────────────
+  function zoomAt(f,mx,my){
+    const dx=dxS(mx),dy=dyS(my); _scale=Math.max(1e-5,Math.min(_scale*f,1e6));
+    _tx=mx-dx*_scale; _ty=my+dy*_scale; updateZoom(); render();
+  }
+
+  // ── Events ────────────────────────────────────────────────────────────────
+  canvas.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
+    _drag = true; _didDrag = false;
+    _dx0 = e.clientX; _dy0 = e.clientY; _tx0 = _tx; _ty0 = _ty;
+    canvas.style.cursor = "grabbing";
+  });
+  window.addEventListener("mouseup", () => { _drag = false; canvas.style.cursor = "crosshair"; });
+  canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect(), cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    if (_drag) {
+      if (Math.hypot(e.clientX - _dx0, e.clientY - _dy0) > 4) _didDrag = true;
+      _tx = _tx0 + (e.clientX - _dx0); _ty = _ty0 + (e.clientY - _dy0); render();
+    }
+    coordEl.textContent = `x: ${dxS(cx).toFixed(1)}  y: ${dyS(cy).toFixed(1)}`;
+  });
+
+  // Click → highlight the dimension annotation under the cursor (cyan),
+  // click empty space to deselect.
+  canvas.addEventListener("click", e => {
+    if (_didDrag) { _didDrag = false; return; } // ignore drag-release
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    let hit = null;
+    for (const { handle, box } of _dimHitBoxes) {
+      if (cx >= box.x1 && cx <= box.x2 && cy >= box.y1 && cy <= box.y2) {
+        hit = handle; break;
+      }
+    }
+    if (_selectedHandle !== hit) { _selectedHandle = hit; render(); }
+  });
+  canvas.addEventListener("wheel",e=>{
+    e.preventDefault();
+    const rect=canvas.getBoundingClientRect();
+    zoomAt(e.deltaY<0?1.15:1/1.15,e.clientX-rect.left,e.clientY-rect.top);
+  },{passive:false});
+  document.getElementById("dxf-fit").addEventListener("click",()=>{fit();render();});
+  document.getElementById("dxf-zoom-in").addEventListener("click",()=>zoomAt(1.5,canvas.width/2,canvas.height/2));
+  document.getElementById("dxf-zoom-out").addEventListener("click",()=>zoomAt(1/1.5,canvas.width/2,canvas.height/2));
+  window.addEventListener("resize",()=>{if(!document.getElementById("panel-dxf").hidden){resizeCanvas();render();}});
+
+  // ── Public API ─────────────────────────────────────────────────────────────
+  window._dxfViewerReady=pid=>{ _pid=pid; _dxf=null; statEl.textContent="Ready — open DXF View tab to load."; };
+  window._dxfTabActivated=()=>requestAnimationFrame(()=>{ if(_dxf){resizeCanvas();render();}else if(_pid)loadDxf();else{resizeCanvas();render();} });
+})();
+</script>
+{% endblock %}

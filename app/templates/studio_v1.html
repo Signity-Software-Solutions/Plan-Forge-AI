@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Studio · {{ app_name }} (v1)</title>
+  <link rel="stylesheet" href="/static/css/studio.css">
+  <style>
+  .llm-provider-btn { display:flex; flex-direction:column; align-items:center; gap:.2rem;
+    padding:.75rem .5rem; border-radius:8px; border:2px solid #334155; background:#0f172a;
+    color:#cbd5e1; cursor:pointer; transition:border-color .15s, opacity .15s; font-family:inherit; }
+  .llm-provider-btn:hover:not(:disabled){ border-color:#475569; }
+  .llm-provider-btn.active{ border-color:#38bdf8; background:#0c2a3f; color:#e2e8f0; }
+  .llm-provider-btn[data-provider="ollama"].active{ border-color:#22c55e; background:#052e16; }
+  .llm-provider-btn[data-provider="gemini"].active{ border-color:#a78bfa; background:#1e1040; }
+  .llm-provider-btn:disabled{ opacity:.38; cursor:not-allowed; }
+  .llm-btn-icon{ font-size:1.4rem; line-height:1; }
+  .llm-btn-label{ font-weight:600; font-size:.9rem; }
+  .llm-btn-sub{ font-size:.72rem; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <h1>{{ app_name }} <span style="font-size:.6em;color:#38bdf8;">v1</span></h1>
+    <nav>
+      <a href="/studio">Studio</a>
+      <a href="/docs">API docs</a>
+      <a href="/api/v1/health/ready">Health</a>
+    </nav>
+  </header>
+  <main class="site-main">
+
+  <section class="panel" id="llm-panel">
+    <h2 style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:.5rem;" id="llm-toggle">
+      <span id="llm-toggle-icon" style="font-size:.8em;">▶</span>
+      AI Model
+      <span id="llm-badge" style="font-size:.75rem;padding:.2rem .65rem;border-radius:999px;background:#1e293b;color:#94a3b8;margin-left:.25rem;font-weight:500;"></span>
+    </h2>
+    <div id="llm-body" hidden>
+      <p style="margin:0 0 .9rem;color:#94a3b8;font-size:.875rem;">
+        Select which AI provider to use for normalization. Credentials are read from <code>.env</code> — greyed-out options need their key set first.
+      </p>
+      <div id="llm-provider-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;margin-bottom:1.1rem;">
+        <button class="llm-provider-btn" data-provider="none" type="button"><span class="llm-btn-icon">⊘</span><span class="llm-btn-label">None</span><span class="llm-btn-sub">Heuristic only</span></button>
+        <button class="llm-provider-btn" data-provider="ollama" type="button"><span class="llm-btn-icon">🦙</span><span class="llm-btn-label">Ollama</span><span class="llm-btn-sub">—</span></button>
+        <button class="llm-provider-btn" data-provider="openai" type="button"><span class="llm-btn-icon">✦</span><span class="llm-btn-label">OpenAI</span><span class="llm-btn-sub">—</span></button>
+        <button class="llm-provider-btn" data-provider="gemini" type="button"><span class="llm-btn-icon">◈</span><span class="llm-btn-label">Gemini</span><span class="llm-btn-sub">—</span></button>
+      </div>
+      <div class="field" style="max-width:320px;margin-bottom:1rem;">
+        <label for="llm-mode-sel">Normalize mode</label>
+        <select id="llm-mode-sel">
+          <option value="llm_labels_only">LLM — labels &amp; names only</option>
+          <option value="llm_merge">LLM — full merge (gated)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" id="btn-save-llm" style="padding:.35rem 1.1rem;font-size:.875rem;">Save</button>
+        <button type="button" class="btn" id="btn-test-llm" style="padding:.35rem 1.1rem;font-size:.875rem;background:#1e293b;border:1px solid #334155;color:#94a3b8;">Test Connection</button>
+        <span id="llm-save-msg" style="font-size:.85rem;color:#94a3b8;"></span>
+      </div>
+      <div id="llm-test-result" hidden style="margin-top:.9rem;padding:.75rem 1rem;border-radius:6px;font-size:.82rem;font-family:monospace;line-height:1.6;border:1px solid #334155;background:#0f172a;"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Upload</h2>
+    <p class="hint" style="margin:0 0 1rem; color:#94a3b8; font-size:.9rem;">
+      Choose the file type, then select one file. The v1 pipeline runs: create project → upload → parse+normalize → render. Everything is persisted in PostgreSQL with full versioning.
+    </p>
+    <div class="upload-row">
+      <div class="field">
+        <label for="input-type">Input type</label>
+        <select id="input-type" name="type">
+          <option value="sheet" selected>Sheet (xlsx, csv, zip, pdf)</option>
+          <option value="image">Image (png, jpg, …)</option>
+          <option value="cad">CAD (dxf)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="project-name">Project name (optional)</label>
+        <input type="text" id="project-name" placeholder="e.g. Store layout" autocomplete="off">
+      </div>
+    </div>
+    <div class="upload-row" style="margin-top:1rem; align-items:center;">
+      <label class="drop-zone" id="drop-zone" for="file-input">
+        <div>Drop a file here or <strong>click to browse</strong></div>
+        <div class="hint" id="accept-hint"></div>
+        <div class="filename" id="file-label">No file selected</div>
+        <input type="file" id="file-input" name="file">
+      </label>
+      <button type="button" class="btn btn-primary" id="btn-run" disabled>Run pipeline</button>
+    </div>
+    <div class="steps" id="steps" aria-live="polite">
+      <span class="step" data-step="project">1 · Project</span>
+      <span class="step" data-step="upload">2 · Upload</span>
+      <span class="step" data-step="parse">3 · Parse + Normalize</span>
+      <span class="step" data-step="layout">4 · Render</span>
+    </div>
+    <p class="status-msg" id="status"></p>
+    <p id="ai-used-line" hidden style="margin:.35rem 0 0;font-size:.8rem;color:#64748b;"></p>
+  </section>
+
+  <section class="panel result-panel">
+    <h2>Result</h2>
+    <p class="empty-result" id="result-empty">Run the pipeline to see the vector plan here.</p>
+    <div id="result-tools" hidden>
+      <div class="result-toolbar">
+        <label><input type="checkbox" id="fit-width" /> Shrink to fit panel width</label>
+        <span class="result-hint">Otherwise scroll to see the full plan.</span>
+        <a id="btn-dxf" href="#" hidden style="margin-left:auto;padding:.35rem .9rem;background:#0f4c81;color:#e2e8f0;border-radius:4px;font-size:.85rem;text-decoration:none;white-space:nowrap;">⬇ Download DXF</a>
+      </div>
+      <div class="svg-viewport" role="region" aria-label="Layout preview">
+        <div class="svg-host" id="svg-host"></div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+
+<script>
+const API = "/api/v1";
+const $ = (id) => document.getElementById(id);
+
+// ── error extraction (v1 returns {error,message} or FastAPI {detail}) ──
+async function apiError(res) {
+  try {
+    const j = await res.json();
+    if (j.message) return j.message;
+    const d = j.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) return d.map((x) => x.msg ? `${(x.loc||[]).join('.')}: ${x.msg}` : JSON.stringify(x)).join("; ");
+    return JSON.stringify(d ?? j);
+  } catch { return await res.text(); }
+}
+
+// ── Upload / pipeline ──────────────────────────────────────────────
+(function () {
+  const fileInput=$("file-input"), fileLabel=$("file-label"), acceptHint=$("accept-hint"),
+    inputType=$("input-type"), projectName=$("project-name"), btnRun=$("btn-run"),
+    statusEl=$("status"), aiUsedLine=$("ai-used-line"), stepsEl=$("steps"),
+    svgHost=$("svg-host"), resultEmpty=$("result-empty"), resultTools=$("result-tools"),
+    fitWidthCb=$("fit-width"), btnDxf=$("btn-dxf"), drop=$("drop-zone");
+
+  const acceptMap = {
+    sheet:".xlsx,.xls,.csv,.zip,.pdf", image:".png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp", cad:".dxf" };
+  function syncAccept(){ const t=inputType.value; fileInput.accept=acceptMap[t]||"";
+    acceptHint.textContent = t==="sheet"?"Excel · CSV · ZIP · PDF":t==="image"?"PNG · JPG · WebP · …":"DXF"; }
+  inputType.addEventListener("change", syncAccept); syncAccept();
+
+  function setFile(f){ if(!f){fileLabel.textContent="No file selected";btnRun.disabled=true;return;}
+    fileLabel.textContent=f.name; btnRun.disabled=false; }
+  fileInput.addEventListener("change", ()=>setFile(fileInput.files[0]));
+  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("dragover");}));
+  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("dragover");}));
+  drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f){ try{const dt=new DataTransfer();dt.items.add(f);fileInput.files=dt.files;}catch(_){} setFile(f);} });
+
+  function setStep(name){ const order=["project","upload","parse","layout"]; const idx=order.indexOf(name);
+    stepsEl.querySelectorAll(".step").forEach(el=>{ const i=order.indexOf(el.getAttribute("data-step"));
+      el.classList.remove("active","done"); if(i<idx)el.classList.add("done"); if(i===idx)el.classList.add("active"); }); }
+
+  btnRun.addEventListener("click", async () => {
+    const file=fileInput.files[0]; if(!file) return;
+    statusEl.textContent=""; statusEl.className="status-msg"; aiUsedLine.hidden=true;
+    svgHost.innerHTML=""; resultTools.hidden=true; resultEmpty.hidden=false; btnDxf.hidden=true;
+    btnRun.disabled=true;
+    try {
+      // 1) project
+      setStep("project"); statusEl.textContent="Creating project…";
+      const pname = projectName.value.trim() || `Studio ${new Date().toISOString().slice(0,19)}`;
+      let res = await fetch(`${API}/projects`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:pname})});
+      if(!res.ok) throw new Error(await apiError(res));
+      const project_id = (await res.json()).id;
+
+      // 2) upload
+      setStep("upload"); statusEl.textContent="Uploading…";
+      const fd=new FormData(); fd.append("file",file); fd.append("project_id",project_id); fd.append("file_type",inputType.value);
+      res = await fetch(`${API}/files`, {method:"POST",body:fd});
+      if(!res.ok) throw new Error(await apiError(res));
+      const file_id=(await res.json()).file_id;
+
+      // 3) parse + normalize
+      setStep("parse"); statusEl.textContent="Parsing & normalizing…";
+      res = await fetch(`${API}/files/${file_id}/parse`, {method:"POST"});
+      if(!res.ok) throw new Error(await apiError(res));
+      const parsed = await res.json();
+      const normalized_id = parsed.normalized_document_id;
+      const nb = (parsed.layout && parsed.layout.meta && parsed.layout.meta.normalized_by) || "";
+
+      // 4) render
+      setStep("layout"); statusEl.textContent="Rendering layout…";
+      res = await fetch(`${API}/normalized/${normalized_id}/render`, {method:"POST"});
+      if(!res.ok) throw new Error(await apiError(res));
+      const out = await res.json();
+
+      const svgRes = await fetch(`${API}/outputs/${out.output_id}/svg`);
+      if(!svgRes.ok) throw new Error("SVG not available after render.");
+      svgHost.innerHTML = await svgRes.text();
+      const rootSvg = svgHost.querySelector("svg");
+      if(rootSvg){ rootSvg.classList.add("layout-svg"); rootSvg.setAttribute("preserveAspectRatio","xMinYMin meet"); }
+      resultTools.hidden=false; resultEmpty.hidden=true; fitWidthCb.checked=false; svgHost.classList.remove("fit-width");
+      btnDxf.href=`${API}/outputs/${out.output_id}/dxf`; btnDxf.hidden=false;
+
+      stepsEl.querySelectorAll(".step").forEach(el=>{el.classList.add("done");el.classList.remove("active");});
+      statusEl.textContent = `Done. ${out.validation_issues?.length||0} validation issue(s).`;
+      statusEl.classList.add("ok");
+      if(nb){ aiUsedLine.textContent=`Normalized by: ${nb}`; aiUsedLine.hidden=false; }
+    } catch(e){
+      statusEl.textContent=e.message||String(e); statusEl.classList.add("error"); setStep("project");
+    } finally { btnRun.disabled=!fileInput.files[0]; }
+  });
+  fitWidthCb.addEventListener("change", ()=>svgHost.classList.toggle("fit-width",fitWidthCb.checked));
+})();
+
+// ── AI Model panel ─────────────────────────────────────────────────
+(function () {
+  const llmToggle=$("llm-toggle"), llmIcon=$("llm-toggle-icon"), llmBody=$("llm-body"),
+    llmBadge=$("llm-badge"), modeSel=$("llm-mode-sel"), btnSave=$("btn-save-llm"),
+    saveMsg=$("llm-save-msg"), btnTest=$("btn-test-llm"), testResult=$("llm-test-result");
+  const BADGE_COLOR={ollama:"#22c55e",openai:"#38bdf8",gemini:"#a78bfa",none:"#64748b"};
+  const BADGE_LABEL={ollama:"Ollama",openai:"OpenAI",gemini:"Gemini",none:"Heuristic"};
+  let selectedProvider="none";
+  const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  llmToggle.addEventListener("click",()=>{ llmBody.hidden=!llmBody.hidden; llmIcon.textContent=llmBody.hidden?"▶":"▼"; });
+
+  function applyConfig(cfg){
+    const active=cfg.active_provider||"none"; selectedProvider=active;
+    document.querySelectorAll(".llm-provider-btn").forEach(btn=>{
+      const p=btn.dataset.provider; const avail=p==="none"||cfg.available?.[p];
+      btn.disabled=!avail; btn.classList.toggle("active",p===active);
+      const sub=btn.querySelector(".llm-btn-sub"); const d=cfg.details?.[p];
+      if(sub){ if(p==="none")sub.textContent="No LLM"; else if(d)sub.textContent=d.model||d.host||"—"; else sub.textContent="Not configured"; }
+    });
+    modeSel.value=cfg.normalize_mode||"llm_labels_only";
+    llmBadge.textContent=BADGE_LABEL[active]||active; llmBadge.style.color=BADGE_COLOR[active]||"#94a3b8";
+  }
+  document.querySelectorAll(".llm-provider-btn").forEach(btn=>btn.addEventListener("click",()=>{
+    if(btn.disabled)return; selectedProvider=btn.dataset.provider;
+    document.querySelectorAll(".llm-provider-btn").forEach(b=>b.classList.toggle("active",b.dataset.provider===selectedProvider)); }));
+
+  btnSave.addEventListener("click", async ()=>{
+    saveMsg.textContent="Saving…"; saveMsg.style.color="#94a3b8";
+    try{
+      const r=await fetch(`${API}/llm/config`,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({provider:selectedProvider,normalize_mode:modeSel.value})});
+      if(!r.ok) throw new Error(await apiError(r));
+      saveMsg.textContent="Saved."; saveMsg.style.color="#4ade80";
+      fetch(`${API}/llm/config`).then(r=>r.json()).then(applyConfig).catch(()=>{});
+    }catch(e){ saveMsg.textContent=e.message||"Save failed."; saveMsg.style.color="#f87171"; }
+  });
+
+  btnTest.addEventListener("click", async ()=>{
+    testResult.hidden=false; testResult.style.borderColor="#334155";
+    testResult.innerHTML="<span style='color:#94a3b8'>Testing… sending a real prompt.</span>"; btnTest.disabled=true;
+    try{
+      const r=await fetch(`${API}/llm/test`,{method:"POST"}); const d=await r.json();
+      if(d.ok){
+        testResult.style.borderColor="#22c55e";
+        testResult.innerHTML=[`<span style='color:#4ade80'>✓ Connected — AI is live</span>`,
+          `<span style='color:#94a3b8'>Provider :</span> ${esc(d.provider)}`,
+          `<span style='color:#94a3b8'>Model    :</span> ${esc(d.model||"")}`,
+          `<span style='color:#94a3b8'>Response :</span> <span style='color:#fde68a'>${esc(d.response||"")}</span>`].join("<br>");
+      } else {
+        testResult.style.borderColor="#ef4444";
+        testResult.innerHTML=[`<span style='color:#f87171'>✗ Failed</span>`,
+          `<span style='color:#94a3b8'>Provider :</span> ${esc(d.provider||"")}`,
+          `<span style='color:#94a3b8'>Error    :</span> <span style='color:#fca5a5'>${esc(d.error||"unknown")}</span>`].join("<br>");
+      }
+    }catch(e){ testResult.style.borderColor="#ef4444"; testResult.innerHTML=`<span style='color:#f87171'>✗ ${esc(String(e))}</span>`; }
+    finally{ btnTest.disabled=false; }
+  });
+
+  fetch(`${API}/llm/config`).then(r=>r.json()).then(applyConfig).catch(()=>{ llmBadge.textContent="error"; llmBadge.style.color="#f87171"; });
+})();
+</script>
+</body>
+</html>

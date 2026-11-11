@@ -1,0 +1,609 @@
+/* PlanForge studio — minimal, readable */
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --border: #334155;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --ok: #4ade80;
+  --err: #f87171;
+  --radius: 10px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.site-main {
+  max-width: min(1600px, 99vw);
+  margin: 0 auto;
+  padding: 1rem 1.25rem 2rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.field label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.field select,
+.field input[type="text"] {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.95rem;
+}
+
+.drop-zone {
+  flex: 1;
+  min-width: 200px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.drop-zone input[type="file"] {
+  display: none;
+}
+
+.drop-zone .hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.drop-zone .filename {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.btn-primary:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.step {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.step.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.step.done {
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
+.status-msg {
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+  min-height: 1.25rem;
+}
+
+.status-msg.error {
+  color: var(--err);
+}
+
+.status-msg.ok {
+  color: var(--ok);
+}
+
+.result-panel {
+  min-height: 120px;
+}
+
+.result-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.result-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.result-toolbar input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+}
+
+.result-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Scroll the full SVG at native resolution (no clipping). */
+.svg-viewport {
+  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 14rem);
+  min-height: min(360px, 50vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.svg-host {
+  display: inline-block;
+  padding: 12px;
+  vertical-align: top;
+}
+
+/* Native width/height from the file — scroll viewport to see edges */
+.svg-host svg.layout-svg {
+  display: block;
+  max-width: none;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  vertical-align: top;
+}
+
+/* Optional: scale to panel width (may feel cramped on wide sheets) */
+.svg-host.fit-width svg.layout-svg {
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+}
+
+.validation-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: #fbbf24;
+}
+
+.empty-result {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.norm-meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.norm-meta.warn {
+  color: #fbbf24;
+}
+
+/* ── View tabs (Diagram / DXF View) ────────────────────────────────────── */
+.view-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.view-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.4rem 1.1rem;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  font-family: inherit;
+  margin-bottom: -1px;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── DXF viewer ─────────────────────────────────────────────────────────── */
+.dxf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+.dxf-tool-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 0.22rem 0.65rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.6;
+  transition: border-color 0.12s, color 0.12s;
+}
+.dxf-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dxf-zoom-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-width: 4rem;
+  font-family: monospace;
+  text-align: center;
+}
+.dxf-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1rem;
+  background: var(--border);
+  margin: 0 0.15rem;
+}
+.dxf-coords {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: monospace;
+  min-width: 18ch;
+}
+.dxf-workspace {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0d1117;
+  height: calc(100vh - 14rem);
+  min-height: 400px;
+}
+#dxf-canvas {
+  flex: 1;
+  display: block;
+  cursor: crosshair;
+  min-width: 0;
+}
+.dxf-layers-panel {
+  width: 168px;
+  flex-shrink: 0;
+  background: #111827;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 0.5rem 0.45rem;
+}
+.dxf-layers-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+.dxf-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.2rem;
+  font-size: 0.74rem;
+  color: #cbd5e1;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.1s;
+  user-select: none;
+}
+.dxf-layer-row:hover { background: rgba(255,255,255,.05); }
+.dxf-layer-row.hidden-layer { opacity: 0.35; }
+.dxf-layer-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,.15);
+}
+.dxf-layer-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dxf-layer-check {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+}
+
+/* ── 3D massing viewer (Tier A) ───────────────────────────── */
+.massing-workspace {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* Must track BACKGROUND in massing-viewer.js — a dark frame around a light
+     canvas reads as a rendering fault. */
+  background: #f4f4f6;
+  height: calc(100vh - 14rem);
+  min-height: 400px;
+}
+.massing-host {
+  position: absolute;
+  inset: 0;
+}
+.massing-host canvas { display: block; }
+
+.massing-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .8rem;
+  color: #94a3b8;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.massing-toggle input { cursor: pointer; }
+
+/* Dimension callouts, rendered as DOM text over the canvas. */
+.massing-label {
+  font: 600 11px/1.2 system-ui, sans-serif;
+  color: #1e293b;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid #b8bcc4;
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.massing-label--overall_width,
+.massing-label--overall_depth { color: #1d4ed8; border-color: #93b4e8; }
+.massing-label--ceiling_height { color: #92400e; border-color: #d9a441; }
+.massing-label--fixture_extents { font-size: 10px; color: #475569; }
+
+/* Z provenance. An assumed ceiling height cannot be detected downstream, so
+   the warning is non-dismissible while it applies. */
+.massing-badge {
+  position: absolute;
+  left: .75rem;
+  bottom: .75rem;
+  z-index: 2;
+  padding: .4rem .8rem;
+  border-radius: 4px;
+  font-size: .76rem;
+  font-weight: 600;
+  color: #7c2d12;
+  background: rgba(254, 243, 199, .96);
+  border: 1px solid #d97706;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+  pointer-events: none;
+}
+
+.massing-pick {
+  position: absolute;
+  top: .75rem;
+  right: .75rem;
+  z-index: 3;
+  width: 240px;
+  max-width: calc(100% - 1.5rem);
+  background: rgba(255, 255, 255, .97);
+  border: 1px solid #c3c7cf;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .14);
+  font-size: .8rem;
+  color: #1e293b;
+}
+.massing-pick-close {
+  position: absolute;
+  top: .3rem;
+  right: .4rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.1rem;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.massing-pick-close:hover { background: #e8e8ec; color: #1e293b; }
+.massing-pick-body { padding: .8rem .9rem .7rem; }
+
+/* ── Photoreal render (Stage 2: Blender/Cycles) ──────────────────────── */
+.photoreal-mode-tabs {
+  margin-bottom: 0.5rem;
+}
+.photoreal-mode-tabs .view-tab {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.9rem;
+}
+.photoreal-workspace {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+  background: #f4f4f6;
+  height: calc(100vh - 16rem);
+  min-height: 380px;
+}
+.photoreal-empty {
+  max-width: 32rem;
+  padding: 0 2rem;
+  text-align: center;
+  font-size: .85rem;
+  line-height: 1.5;
+  color: #64748b;
+}
+.photoreal-image {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+.massing-pick-title {
+  font-weight: 700;
+  font-size: .88rem;
+  margin-bottom: .5rem;
+  padding-right: 1.2rem;
+  word-break: break-word;
+}
+.massing-pick-row {
+  display: flex;
+  justify-content: space-between;
+  gap: .6rem;
+  padding: .18rem 0;
+  border-top: 1px solid #eef0f3;
+}
+.massing-pick-row:first-of-type { border-top: none; }
+.massing-pick-row span { color: #64748b; }
+.massing-pick-row b { font-weight: 600; text-align: right; }
+
+.massing-error {
+  position: absolute;
+  inset: 0;
+  background: #f4f4f6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: 2rem;
+  text-align: center;
+  color: #334155;
+  font-size: .9rem;
+}
+.massing-error strong { color: #b91c1c; font-size: 1rem; }
+.massing-error p { margin: 0; max-width: 46ch; line-height: 1.5; }
+.massing-error pre {
+  margin: .25rem 0 0;
+  padding: .5rem .75rem;
+  max-width: 60ch;
+  overflow-x: auto;
+  font-size: .74rem;
+  color: #475569;
+  background: #e8e8ec;
+  border: 1px solid #c3c7cf;
+  border-radius: 4px;
+}
+.massing-error-hint { color: #64748b; font-size: .8rem; }
+
+.massing-select {
+  background: #0f172a;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: .2rem .4rem;
+  font-size: .8rem;
+  cursor: pointer;
+}

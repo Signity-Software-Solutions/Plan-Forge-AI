@@ -1,0 +1,93 @@
+x-app-base: &app-base
+  image: photoreal-app:latest
+  env_file:
+    - .env
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+  networks:
+    - app-network
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+
+  app:
+    <<: *app-base
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: photoreal-app
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "8000:8000"
+
+  celery:
+    <<: *app-base
+    container_name: photoreal-celery
+    command:
+      - celery
+      - -A
+      - app.services.photoreal
+      - worker
+      - --loglevel=info
+
+  postgres:
+    image: postgres:18
+    container_name: photoreal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+
+  redis:
+    image: redis:8-alpine
+    container_name: photoreal-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+    name: photoreal-postgres-data
+  redis_data:
+    name: photoreal-redis-data
+
+networks:
+  app-network:
+    driver: bridge

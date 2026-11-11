@@ -1,0 +1,70 @@
+{
+  "_comment": "Tileable surface textures. Same provenance rule as fixtures/manifest.json: these files ship inside client deliverables, so CC0 only and every entry carries its source. Unlike the fixture assets, these are kept at their source tone -- the tint that reaches the render comes from mesh_builder's measured _PALETTE, applied at load time, so the palette stays the single authority on colour and these files stay as-downloaded apart from the resize noted below.",
+  "textures": {
+    "oak_floor": {
+      "file": "oak_floor.jpg",
+      "material_key": "floor",
+      "source": "ambientCG",
+      "source_id": "WoodFloor039",
+      "source_name": "Wood Floor 039",
+      "source_url": "https://ambientcg.com/view?id=WoodFloor039",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licence_verified": "ambientCG is CC0 site-wide; confirmed on the asset page before download",
+      "modifications": "1K Color map, resized 1024x1024 -> 512x512 (Lanczos) and re-encoded JPEG q82.",
+      "native_map_set": "Color, Roughness, NormalDX, NormalGL, Displacement, AmbientOcclusion",
+      "tile_mm": [1200.0, 1200.0],
+      "tile_note": "Physical tile size is a judgement, not published by the source: 1200mm across ~6 visible planks gives ~200mm plank width, which is realistic wide-plank oak and matches the reference proposal's floor scale.",
+      "selection_note": "Chosen over WoodFloor051 (the manifest's own backup) after rendering both: 051 is a mid-brown parquet, mean RGB (155,123,93), far darker than the tone measured off the reference render. 039's long planks and light warm tone match page 3.",
+      "orm": {
+        "file": "oak_floor_orm.jpg",
+        "packing": "R=AmbientOcclusion, G=Roughness, B=0 (non-metal). Standard glTF ORM packing -- one image serves both metallicRoughnessTexture and occlusionTexture, per the glTF spec's own note that this is a common optimization.",
+        "source_maps": "1K Roughness + 1K AmbientOcclusion, resized to match the colour map, re-encoded JPEG q85."
+      },
+      "normal": {
+        "file": "oak_floor_normal.jpg",
+        "convention": "NormalGL (OpenGL/+Y), matching glTF's tangent-space convention.",
+        "source_map": "1K NormalGL, resized to match the colour map, re-encoded JPEG q90 with 4:4:4 chroma (no subsampling) -- subsampling blurs the G/B channels that encode tangent-space X/Y and visibly misdirects the lighting."
+      }
+    },
+    "concrete_wall": {
+      "file": "concrete_wall.jpg",
+      "material_key": "wall",
+      "source": "ambientCG",
+      "source_id": "Concrete034",
+      "source_name": "Concrete 034",
+      "source_url": "https://ambientcg.com/view?id=Concrete034",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licence_verified": "ambientCG is CC0 site-wide; confirmed on the asset page before download",
+      "modifications": "1K Color map, resized 1024x512 -> 512x256 (Lanczos, aspect preserved) and re-encoded JPEG q82.",
+      "native_map_set": "Color, Roughness, NormalDX, NormalGL, Displacement",
+      "tile_mm": [2400.0, 1200.0],
+      "tile_note": "Source map is 2:1, so the world tile is too; 2400mm across reads as a broad cast-concrete panel rather than a repeating pattern.",
+      "orm": {
+        "file": "concrete_wall_orm.jpg",
+        "packing": "R=255 (Concrete034 ships no AmbientOcclusion map -- flat, i.e. no occlusion), G=Roughness, B=0 (non-metal).",
+        "source_maps": "1K Roughness only, resized to match the colour map, re-encoded JPEG q85."
+      },
+      "normal": {
+        "file": "concrete_wall_normal.jpg",
+        "convention": "NormalGL (OpenGL/+Y), matching glTF's tangent-space convention.",
+        "source_map": "1K NormalGL, resized to match the colour map, re-encoded JPEG q90 with 4:4:4 chroma (no subsampling)."
+      }
+    }
+  },
+  "not_shipped": {
+    "Wood028": {
+      "intended_use": "matte black laminate for cabinet and counter bodies",
+      "source_url": "https://ambientcg.com/view?id=Wood028",
+      "licence": "CC0-1.0",
+      "reason_not_shipped": "Deliberately skipped, not overlooked. The candidate manifest that sourced it recorded fit_quality 'rough' and its own note said a flat near-black -- already in the measured palette -- would likely read better at massing-model viewing distance than a wood-category material merely tagged 'black'. Cabinetry in the reference is a uniform matte near-black with no visible grain, so a wood texture there would add error, not detail. Revisit only if a real laminate scan becomes available.",
+      "roughness_handled_instead": "The flatness complaint it was meant to answer is addressed by giving every material a real roughnessFactor rather than the previous blanket 1.0."
+    }
+  },
+  "shipped_since": {
+    "roughness_and_normal_maps": "Previously withheld pending an eye-level walk mode (see git history for the prior note). Now shipped for floor and wall -- the two textured materials -- as packed ORM + normal JPEGs, ~48KB added per material. Still only these two: a 100mm-deep fixture band shows too little of a tile for a normal map to read, so cabinetry etc. stay scalar-roughness flat colour."
+  }
+}

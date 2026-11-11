@@ -1,0 +1,36 @@
+# Web
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+jinja2>=3.1.0
+
+# Data & validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# CAD / geometry / output
+ezdxf>=1.1.0
+shapely>=2.0.0
+svgwrite>=1.4.3
+
+# Image / OCR
+opencv-python-headless>=4.9.0.80
+numpy>=1.26.0
+pytesseract>=0.3.10
+Pillow>=10.2.0
+
+# 3D massing
+trimesh>=4.5
+mapbox-earcut>=1.0
+
+# Sheets
+pdfplumber>=0.10.4
+pandas>=2.1.0
+openpyxl>=3.1.2
+
+# LLM
+httpx>=0.26.0
+ollama>=0.4.0
+
+# Celery / Redis
+celery[redis]>=5.4.0

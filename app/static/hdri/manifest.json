@@ -1,0 +1,19 @@
+{
+  "_comment": "Viewer-side image-based lighting environment. This file is fetched by the browser (app/static/js/massing-viewer.js), not embedded in the exported GLB, so it carries no weight against the GLB size budget guarded by tests/test_mesh_builder.py. Same provenance rule as the other asset manifests: CC0 only, verified on the asset's own page, source recorded here. Lives under app/static/hdri/ rather than app/static/env/ -- the repo's .gitignore has a bare 'env/' rule for Python virtualenvs that silently matches any directory named env/ at any depth, which swallowed this folder the first time.",
+  "hdri": {
+    "phone_shop_1k": {
+      "file": "phone_shop_1k.hdr",
+      "source": "Poly Haven",
+      "source_id": "phone_shop",
+      "source_url": "https://polyhaven.com/a/phone_shop",
+      "author": "Poly Haven",
+      "licence": "CC0-1.0",
+      "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licence_verified": "Poly Haven is CC0 site-wide for every asset type; confirmed on the asset page before download.",
+      "resolution": "1k (1024x512 equirectangular), Radiance .hdr -- the smallest resolution Poly Haven publishes for this HDRI",
+      "size_bytes": 1686918,
+      "selection_note": "Chosen over a generic studio HDRI because the reflections and ambient colour it contributes are themselves from an indoor retail-electronics space -- the nearest real-world lighting analogue to the massing model available under CC0 -- rather than a neutral photo-studio rig.",
+      "modifications": "None. Shipped exactly as downloaded."
+    }
+  }
+}

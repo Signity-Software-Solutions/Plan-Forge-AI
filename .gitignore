@@ -1,0 +1,60 @@
+# Secrets & local env (never commit — see .env.example)
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local app data & POC artifacts (regenerate via API / scripts; keep repo lean)
+uploads/
+outputs/
+samples/
+pipeline_output/
+
+# Portable Blender install for the photoreal render pipeline (~1.3GB) --
+# fetched locally by scripts/setup_blender.sh, never committed. See
+# app/services/photoreal.py for how BLENDER_BIN is resolved.
+.tools/
+
+# Local DB dump files / stray artifacts
+*.db
+
+# Packaging / build
+*.egg-info/
+dist/
+build/
+
+# Editors (optional — remove if you want shared IDE settings)
+.idea/
+.vscode/
+
+# OS / misc
+.DS_Store
+Thumbs.db
+*.log
+
+# AI tooling / local editor config (never commit)
+.claude/
+.mcp.json
+
+# Client business documents (local only, never commit)
+docs/Layout Mind*
+docs/PlanForge_Infrastructure_and_ThirdParty_Costs.md
+docs/PlanForge_AI_Technical_Proposal.pdf
+docs/PlanForge_Tools_Technology_Stack.docx
+*_FeatureList_Estimation.xlsx
